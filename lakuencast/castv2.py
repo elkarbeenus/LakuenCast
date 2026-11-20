@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 import logging
+import queue
+import select
 import socket
 import ssl
 import struct
@@ -107,6 +109,10 @@ class CastDevice:
 
         self._sock: ssl.SSLSocket | None = None
         self._lock = threading.Lock()
+        # OpenSSL verträgt kein gleichzeitiges Lesen und Schreiben aus zwei Threads.
+        # Deshalb schreibt nur der I/O-Thread; andere Threads legen Nachrichten in die Warteschlange.
+        self._outbox: queue.Queue[bytes] = queue.Queue()
+        self._wake_r, self._wake_w = socket.socketpair()
         self._request_id = 0
         self._waiters: dict[int, tuple[threading.Event, list]] = {}
         self._running = False
@@ -127,20 +133,21 @@ class CastDevice:
         self._sock = ctx.wrap_socket(raw)
         self._sock.settimeout(None)
         self._running = True
-        threading.Thread(target=self._reader, name="cast-reader", daemon=True).start()
+        threading.Thread(target=self._io_loop, name="cast-io", daemon=True).start()
         threading.Thread(target=self._heartbeat, name="cast-heartbeat", daemon=True).start()
         self._send(RECEIVER_ID, NS_CONNECTION, {"type": "CONNECT"})
         self.get_receiver_status()
 
     def close(self) -> None:
-        self._running = False
+        if not self._running:
+            return
         try:
-            if self._sock:
-                self._send(RECEIVER_ID, NS_CONNECTION, {"type": "CLOSE"})
-                self._sock.close()
-        except OSError:
+            self._send(RECEIVER_ID, NS_CONNECTION, {"type": "CLOSE"})
+            time.sleep(0.1)
+        except (OSError, ConnectionError):
             pass
-        self._sock = None
+        self._running = False
+        self._wake()
 
     @property
     def connected(self) -> bool:
@@ -150,10 +157,16 @@ class CastDevice:
     def _send(self, dest: str, namespace: str, data: dict) -> None:
         payload = json.dumps(data)
         frame = encode_message(SENDER_ID, dest, namespace, payload)
-        with self._lock:
-            if not self._sock:
-                raise ConnectionError("Nicht verbunden")
-            self._sock.sendall(frame)
+        if not self._running or not self._sock:
+            raise ConnectionError("Nicht verbunden")
+        self._outbox.put(frame)
+        self._wake()
+
+    def _wake(self) -> None:
+        try:
+            self._wake_w.send(b"x")
+        except OSError:
+            pass
 
     def _request(self, dest: str, namespace: str, data: dict, timeout: float = 10.0) -> dict | None:
         with self._lock:
@@ -171,27 +184,56 @@ class CastDevice:
         finally:
             self._waiters.pop(rid, None)
 
-    def _recv_exact(self, n: int) -> bytes:
-        buf = b""
-        while len(buf) < n:
-            chunk = self._sock.recv(n - len(buf))  # type: ignore[union-attr]
-            if not chunk:
-                raise ConnectionError("Verbindung geschlossen")
-            buf += chunk
-        return buf
-
-    def _reader(self) -> None:
+    def _io_loop(self) -> None:
+        sock = self._sock
+        rbuf = b""
         try:
             while self._running:
-                (length,) = struct.unpack(">I", self._recv_exact(4))
-                msg = decode_message(self._recv_exact(length))
-                self._handle(msg)
+                # Ausstehende Nachrichten senden (nur dieser Thread schreibt)
+                if not self._outbox.empty():
+                    sock.setblocking(True)  # type: ignore[union-attr]
+                    while True:
+                        try:
+                            frame = self._outbox.get_nowait()
+                        except queue.Empty:
+                            break
+                        sock.sendall(frame)  # type: ignore[union-attr]
+                if sock.pending() == 0:  # type: ignore[union-attr]
+                    readable, _, _ = select.select([sock, self._wake_r], [], [], 1.0)
+                    if self._wake_r in readable:
+                        try:
+                            self._wake_r.recv(4096)
+                        except OSError:
+                            pass
+                    if sock not in readable:
+                        continue
+                # Nicht blockierend lesen: "lesbar" kann auch nur TLS-Verwaltung sein
+                sock.setblocking(False)  # type: ignore[union-attr]
+                try:
+                    chunk = sock.recv(65536)  # type: ignore[union-attr]
+                except (ssl.SSLWantReadError, ssl.SSLWantWriteError, BlockingIOError):
+                    continue
+                if not chunk:
+                    raise ConnectionError("Verbindung geschlossen")
+                rbuf += chunk
+                while len(rbuf) >= 4:
+                    (length,) = struct.unpack(">I", rbuf[:4])
+                    if len(rbuf) < 4 + length:
+                        break
+                    msg = decode_message(rbuf[4:4 + length])
+                    rbuf = rbuf[4 + length:]
+                    self._handle(msg)
         except (OSError, ConnectionError, ValueError) as e:
             if self._running:
                 log.warning("Verbindung zu %s verloren: %s", self.name, e)
         finally:
             was_running = self._running
             self._running = False
+            try:
+                sock.close()  # type: ignore[union-attr]
+            except OSError:
+                pass
+            self._sock = None
             if was_running and self.on_disconnect:
                 self.on_disconnect()
 

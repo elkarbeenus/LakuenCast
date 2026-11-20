@@ -4,6 +4,8 @@ und lädt die Video-URL, die er per LOAD bekommt, wie ein echter Chromecast."""
 from __future__ import annotations
 
 import json
+import queue
+import select
 import socket
 import ssl
 import struct
@@ -44,6 +46,7 @@ class FakeChromecast:
         self.media_session = 0
         self.lock = threading.Lock()
         self.errors: list[str] = []
+        self.outboxes: dict = {}
         threading.Thread(target=self._accept, daemon=True).start()
 
     def _accept(self):
@@ -57,8 +60,8 @@ class FakeChromecast:
             threading.Thread(target=self._serve, args=(self.conn,), daemon=True).start()
 
     def _send(self, conn, src, dst, ns, data):
-        with self.lock:
-            conn.sendall(encode_message(src, dst, ns, json.dumps(data)))
+        # Nur der Serve-Thread schreibt (OpenSSL ist nicht thread-sicher)
+        self.outboxes.setdefault(id(conn), queue.Queue()).put(encode_message(src, dst, ns, json.dumps(data)))
 
     def _status(self):
         apps = [{"appId": DEFAULT_MEDIA_RECEIVER, "transportId": "web-1", "sessionId": "sess-1"}] if self.app_running else []
@@ -75,6 +78,13 @@ class FakeChromecast:
             return b
         try:
             while True:
+                box = self.outboxes.setdefault(id(conn), queue.Queue())
+                while not box.empty():
+                    conn.sendall(box.get())
+                if conn.pending() == 0:
+                    r, _, _ = select.select([conn], [], [], 0.05)
+                    if not r:
+                        continue
                 (ln,) = struct.unpack(">I", recv(4))
                 m = decode_message(recv(ln))
                 d = json.loads(m["payload"])
