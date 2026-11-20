@@ -10,6 +10,8 @@ import urllib.parse
 
 from . import desktop, mdns, proxy as proxymod
 from .castv2 import CastDevice
+from .config import Config
+from .filecast import FileCast
 from .mirror import Mirror, session_problem
 from .updater import Updater
 
@@ -27,8 +29,9 @@ def lan_ip_for(host: str) -> str:
 
 
 class App:
-    def __init__(self, port: int):
+    def __init__(self, port: int, config: Config | None = None):
         self.port = port
+        self.config = config or Config()
         self.lock = threading.RLock()
         self.devices: dict[str, mdns.Device] = {}
         self.scanning = False
@@ -39,7 +42,9 @@ class App:
         self.message: str | None = None
         self.error: str | None = None
         self.mirror: Mirror | None = None
-        self.quality = "720p"
+        self.quality = self.config["quality"] or "720p"
+        self.file: FileCast | None = None
+        self.next_seq = 0             # "Nächste Folge" auf der Handy-Fernbedienung
         self.proxy = proxymod.Proxy()
         self.finished_seq = 0         # zählt hoch, wenn eine gecastete Folge zu Ende ist
         self._finished_msid = None
@@ -58,7 +63,10 @@ class App:
             with self.lock:
                 for d in found:
                     self.devices[d.id] = d
-                if not self.selected_id and len(self.devices) == 1:
+                last = self.config["last_device"]
+                if not self.selected_id and last in self.devices:
+                    self.selected_id = last
+                elif not self.selected_id and len(self.devices) == 1:
                     self.selected_id = next(iter(self.devices))
         except OSError as e:
             self.error = f"Suche im Netzwerk fehlgeschlagen: {e}"
@@ -88,6 +96,7 @@ class App:
                 self.stop()
                 self._disconnect()
             self.selected_id = dev_id
+            self.config.set(last_device=dev_id)
 
     def _device(self) -> mdns.Device:
         if not self.selected_id or self.selected_id not in self.devices:
@@ -149,13 +158,15 @@ class App:
                 self.quality = quality
         try:
             cast = self._connect()
-            m = Mirror(self.quality)
+            self.config.set(quality=self.quality)
+            m = Mirror(self.quality, low_latency=bool(self.config["low_latency"]), mute_pc=bool(self.config["mute_pc"]))
             m.start()
             self.mirror = m
             if not m.wait_ready():
                 raise RuntimeError(m.error or "Livestream startet nicht")
-            url = f"{self.base_url(cast.host)}/live/live.m3u8"
-            cast.load(url, "application/x-mpegurl", title="PC-Bildschirm (LakuenCast)", live=True)
+            url = f"{self.base_url(cast.host)}/live/{m.stream_name}"
+            ctype = "video/mp4" if m.low_latency else "application/x-mpegurl"
+            cast.load(url, ctype, title="PC-Bildschirm (LakuenCast)", live=True)
             with self.lock:
                 self.mode = "mirroring"
                 self.title = "Bildschirm wird gespiegelt"
@@ -172,6 +183,61 @@ class App:
         if self.mirror:
             self.mirror.stop()
         self.mirror = None
+        if self.file:
+            self.file.stop()
+        self.file = None
+
+    # ---------------------------------------------------------------- Datei senden
+
+    def cast_file(self, path: str) -> None:
+        with self.lock:
+            self.stop()
+            self.mode = "starting"
+            self.error = None
+            self.message = None
+        try:
+            fc = FileCast(path)
+            cast = self._connect()
+            fc.start()
+            self.file = fc
+            if fc.mode != "direct":
+                self.message = ("Wird umgewandelt – Spulen geht nur im schon umgewandelten Teil."
+                                if fc.mode == "transcode" else None)
+            if not fc.wait_ready():
+                raise RuntimeError(fc.error or "Datei startet nicht")
+            url = f"{self.base_url(cast.host)}/file/{fc.name}"
+            ctype = "video/mp4" if fc.mode == "direct" else "application/x-mpegurl"
+            cast.load(url, ctype, title=fc.title, live=False)
+            with self.lock:
+                self.mode = "casting"
+                self.title = fc.title
+        except Exception as e:
+            with self.lock:
+                self._stop_mirror()
+                self.mode = "idle"
+                self.error = str(e)
+            raise
+
+    # ---------------------------------------------------------------- Fernbedienung
+
+    def lan_ip(self) -> str:
+        if self.cast and self.cast.connected:
+            try:
+                return lan_ip_for(self.cast.host)
+            except OSError:
+                pass
+        ips = mdns.local_ipv4s()
+        return ips[0] if ips else "127.0.0.1"
+
+    def remote_url(self) -> str:
+        return f"http://{self.lan_ip()}:{self.port}/remote?k={self.config['remote_key']}"
+
+    def request_next(self) -> None:
+        self.next_seq += 1
+
+    def set_option(self, **kw) -> None:
+        allowed = {k: bool(v) for k, v in kw.items() if k in ("mute_pc", "low_latency")}
+        self.config.set(**allowed)
 
     # ---------------------------------------------------------------- Video casten
 
@@ -294,6 +360,10 @@ class App:
                 "volume": volume,
                 "quality": self.quality,
                 "finishedSeq": self.finished_seq,
+                "nextSeq": self.next_seq,
+                "options": {"mute_pc": bool(self.config["mute_pc"]), "low_latency": bool(self.config["low_latency"])},
+                "pcMuted": bool(self.mirror and self.mirror.pc_muted),
+                "file": {"title": self.file.title, "mode": self.file.mode} if self.file else None,
                 "autostart": desktop.autostart_enabled(),
                 "update": self.updater.to_dict(),
                 "sessionHint": session_problem(),

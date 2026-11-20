@@ -58,6 +58,7 @@ curl -fsSL -o ffmpeg.tar.xz "$FFMPEG_URL"
 tar -xJf ffmpeg.tar.xz
 mkdir -p "$APPDIR/usr/bin"
 install -m 755 ffmpeg-*/bin/ffmpeg "$APPDIR/usr/bin/ffmpeg"
+install -m 755 ffmpeg-*/bin/ffprobe "$APPDIR/usr/bin/ffprobe"
 DEVICES="$("$APPDIR/usr/bin/ffmpeg" -hide_banner -devices 2>/dev/null || true)"
 echo "$DEVICES" | grep -E "x11grab|pulse" || true
 if ! echo "$DEVICES" | grep -q x11grab; then

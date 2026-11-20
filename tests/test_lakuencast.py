@@ -16,6 +16,8 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import tempfile as _tf
+os.environ["XDG_CONFIG_HOME"] = _tf.mkdtemp(prefix="lakuencast-test-config-")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -83,6 +85,59 @@ class TestMdns(unittest.TestCase):
         q = mdns.build_query()
         self.assertEqual(struct.unpack(">H", q[4:6])[0], 1)
         self.assertIn(b"_googlecast", q)
+
+
+class TestQr(unittest.TestCase):
+    def test_qr_decodes(self):
+        from lakuencast import qr
+        try:
+            import cv2
+            import numpy as np
+        except ImportError:
+            self.skipTest("OpenCV fehlt")
+        for text in ["http://192.168.178.20:47800/remote?k=Ab3dEf9hJkLm", "x" * 150]:
+            m = qr.encode(text)
+            n = len(m)
+            img = np.full((n + 8, n + 8), 255, np.uint8)
+            for r, row in enumerate(m):
+                for c, v in enumerate(row):
+                    if v:
+                        img[r + 4, c + 4] = 0
+            img = cv2.resize(img, ((n + 8) * 8, (n + 8) * 8), interpolation=cv2.INTER_NEAREST)
+            self.assertEqual(cv2.QRCodeDetector().detectAndDecode(img)[0], text)
+
+
+class TestFilePlan(unittest.TestCase):
+    def test_plan(self):
+        from lakuencast.filecast import plan
+        base = {"format": "mov,mp4,m4a,3gp", "vcodec": "h264", "pix_fmt": "yuv420p", "height": 1080, "acodec": "aac"}
+        self.assertEqual(plan(base), "direct")
+        self.assertEqual(plan({**base, "format": "matroska,webm"}), "remux")
+        self.assertEqual(plan({**base, "acodec": "ac3"}), "remux")
+        self.assertEqual(plan({**base, "vcodec": "hevc"}), "transcode")
+        self.assertEqual(plan({**base, "height": 2160}), "transcode")
+
+
+def _pactl_ok() -> bool:
+    if not shutil.which("pactl"):
+        return False
+    return subprocess.run(["pactl", "info"], capture_output=True).returncode == 0
+
+
+@unittest.skipUnless(_pactl_ok(), "kein PulseAudio/PipeWire")
+class TestPcMute(unittest.TestCase):
+    def test_redirect_and_restore(self):
+        from lakuencast.mirror import default_sink
+        from lakuencast.pcaudio import PcMute
+        old = default_sink()
+        pm = PcMute()
+        src = pm.start(old)
+        self.assertEqual(src, "lakuencast.monitor")
+        self.assertEqual(default_sink(), "lakuencast")
+        pm.stop()
+        self.assertEqual(default_sink(), old)
+        sinks = subprocess.run(["pactl", "list", "short", "sinks"], capture_output=True, text=True).stdout
+        self.assertNotIn("lakuencast", sinks)
 
 
 class TestPlaylist(unittest.TestCase):
@@ -215,6 +270,90 @@ class TestIntegration(unittest.TestCase):
         r = self.post("/api/stop")
         self.assertEqual(r["status"]["mode"], "idle")
         self.assertFalse(self.cc.app_running)
+
+    def test_5_remote(self):
+        key = self.app.config["remote_key"]
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(f"http://127.0.0.1:{self.port}/remote?k=falsch", timeout=5)
+        self.assertEqual(e.exception.code, 403)
+        html = urllib.request.urlopen(f"http://127.0.0.1:{self.port}/remote?k={key}", timeout=5).read().decode()
+        self.assertIn("Fernbedienung", html)
+        before = self.app.next_seq
+        req = urllib.request.Request(f"http://127.0.0.1:{self.port}/r/{key}/next", data=b"{}",
+                                     headers={"Content-Type": "application/json"})
+        r = json.load(urllib.request.urlopen(req, timeout=5))
+        self.assertTrue(r["ok"])
+        self.assertEqual(self.app.next_seq, before + 1)
+        self.assertEqual(self.app.status()["nextSeq"], before + 1)
+        with self.assertRaises(urllib.error.HTTPError):
+            urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{self.port}/r/falsch/next", data=b"{}"),
+                                   timeout=5)
+        self.assertIn(f"/remote?k={key}", self.app.remote_url())
+
+    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "ffmpeg fehlt")
+    def test_6_cast_files(self):
+        tmp = Path(_tf.mkdtemp())
+        mp4, avi = tmp / "film.mp4", tmp / "alt.avi"
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=320x180:rate=25",
+                        "-f", "lavfi", "-i", "sine=frequency=440", "-t", "12", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                        "-c:a", "aac", "-shortest", str(mp4)], check=True)
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=320x180:rate=25",
+                        "-t", "12", "-c:v", "mpeg4", str(avi)], check=True)
+        self.post("/api/add", {"host": f"127.0.0.1:{self.cc.port}"})
+
+        n0 = len(self.cc.fetched)
+        r = self.post("/api/castfile", {"path": str(mp4)})
+        self.assertTrue(r["ok"], r)
+        self.assertEqual(r["status"]["file"]["mode"], "direct")
+        self.assertEqual(self.cc.loaded[-1]["contentType"], "video/mp4")
+        for _ in range(30):
+            if len(self.cc.fetched) > n0:
+                break
+            time.sleep(0.1)
+        url, st, head = self.cc.fetched[-1]
+        self.assertEqual(st, 200)
+        self.assertIn(b"ftyp", head[:16])
+        # Spulen (Range)
+        rq = urllib.request.Request(self.cc.loaded[-1]["contentId"], headers={"Range": "bytes=100-199"})
+        with urllib.request.urlopen(rq, timeout=5) as resp:
+            self.assertEqual(resp.status, 206)
+            self.assertEqual(len(resp.read()), 100)
+
+        r = self.post("/api/castfile", {"path": str(avi)})
+        self.assertTrue(r["ok"], r)
+        self.assertEqual(r["status"]["file"]["mode"], "transcode")
+        self.assertEqual(self.cc.loaded[-1]["contentType"], "application/x-mpegurl")
+        pl = urllib.request.urlopen(self.cc.loaded[-1]["contentId"], timeout=5).read().decode()
+        self.assertIn("#EXTINF", pl)
+        self.post("/api/stop")
+
+    @unittest.skipUnless(shutil.which("Xvfb") and shutil.which("ffmpeg"), "Xvfb/ffmpeg fehlt")
+    def test_7_mirror_low_latency(self):
+        disp = ":96"
+        xvfb = subprocess.Popen(["Xvfb", disp, "-screen", "0", "1280x720x24"], stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL)
+        old = os.environ.get("DISPLAY")
+        os.environ["DISPLAY"] = disp
+        try:
+            time.sleep(1)
+            self.post("/api/add", {"host": f"127.0.0.1:{self.cc.port}"})
+            self.post("/api/option", {"low_latency": True})
+            r = self.post("/api/mirror", {"quality": "720p"})
+            self.assertTrue(r["ok"], r)
+            media = self.cc.loaded[-1]
+            self.assertTrue(media["contentId"].endswith("/live/stream.mp4"))
+            self.assertEqual(media["contentType"], "video/mp4")
+            with urllib.request.urlopen(media["contentId"], timeout=10) as resp:
+                data = resp.read(4096)
+            self.assertIn(b"ftyp", data[:32])
+            self.post("/api/stop")
+        finally:
+            self.post("/api/option", {"low_latency": False})
+            xvfb.terminate()
+            if old is None:
+                os.environ.pop("DISPLAY", None)
+            else:
+                os.environ["DISPLAY"] = old
 
     @unittest.skipUnless(shutil.which("Xvfb") and shutil.which("ffmpeg"), "Xvfb/ffmpeg fehlt")
     def test_4_mirror_screen(self):

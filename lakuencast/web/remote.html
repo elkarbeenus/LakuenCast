@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#12111a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="LakuenCast">
+  <link rel="apple-touch-icon" href="/icon.png">
+  <title>LakuenCast Fernbedienung</title>
+  <style>
+    :root { color-scheme: dark; --bg:#12111a; --card:#1c1a27; --card2:#262336; --line:#34304a; --text:#f2f0fa;
+            --muted:#a39fb5; --accent:#7c5cff; --ok:#30a46c; --danger:#e5484d; }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { margin: 0; padding: max(16px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
+           background: var(--bg); color: var(--text); font: 16px/1.4 -apple-system, system-ui, sans-serif;
+           user-select: none; -webkit-user-select: none; }
+    header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+    header img { width: 34px; height: 34px; border-radius: 9px; }
+    header .t { font-weight: 700; font-size: 18px; flex: 1; }
+    .pill { font-size: 13px; color: var(--muted); background: var(--card); padding: 4px 10px; border-radius: 99px; }
+    .pill.on { color: #8fe0b4; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px; margin-bottom: 14px; }
+    .title { font-size: 19px; font-weight: 700; min-height: 26px; }
+    .state { color: var(--muted); font-size: 14px; margin-top: 2px; }
+    .prog { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); margin-top: 14px; }
+    .bar { flex: 1; height: 6px; background: var(--card2); border-radius: 3px; overflow: hidden; }
+    .bar div { height: 100%; width: 0; background: var(--accent); transition: width 1s linear; }
+    button { font: inherit; color: var(--text); background: var(--card2); border: 0; border-radius: 16px; cursor: pointer; }
+    button:active { transform: scale(.96); filter: brightness(1.2); }
+    .grid { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 10px; }
+    .grid button { height: 76px; font-size: 18px; font-weight: 600; }
+    .grid .play { background: var(--accent); font-size: 30px; }
+    .wide { width: 100%; height: 62px; font-size: 18px; font-weight: 600; margin-top: 10px; }
+    .next { background: #1d3a2c; color: #c7e8d6; }
+    .row { display: flex; gap: 10px; margin-top: 10px; }
+    .row button { flex: 1; height: 56px; font-weight: 600; }
+    .stop { background: #3a1f24; color: #ffb3b5; }
+    .vol { display: flex; align-items: center; gap: 12px; }
+    .vol button { width: 52px; height: 52px; font-size: 22px; flex: none; }
+    input[type=range] { flex: 1; accent-color: var(--accent); height: 36px; }
+    .err { background: #3b1719; border: 1px solid var(--danger); border-radius: 12px; padding: 10px 12px; margin-bottom: 14px; font-size: 14px; }
+    .err:empty { display: none; }
+    .off { opacity: .45; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="/icon.png" alt="">
+    <div class="t">LakuenCast</div>
+    <div class="pill" id="dev">…</div>
+  </header>
+
+  <div class="err" id="err"></div>
+
+  <div class="card">
+    <div class="title" id="title">Nichts läuft</div>
+    <div class="state" id="state"></div>
+    <div class="prog" id="prog" hidden>
+      <span id="cur">0:00</span><div class="bar"><div id="fill"></div></div><span id="dur">0:00</span>
+    </div>
+  </div>
+
+  <div class="card" id="controls">
+    <div class="grid">
+      <button data-seek="-10">⏪ 10</button>
+      <button class="play" id="pp">⏯</button>
+      <button data-seek="30">30 ⏩</button>
+    </div>
+    <button class="wide next" id="next">⏭ Nächste Folge</button>
+  </div>
+
+  <div class="card">
+    <div class="vol">
+      <button id="mute">🔊</button>
+      <input type="range" id="vol" min="0" max="100" step="1">
+    </div>
+    <div class="row">
+      <button id="mirror">🖥 Spiegeln</button>
+      <button class="stop" id="stop">■ Stopp</button>
+    </div>
+  </div>
+
+  <script>
+    const key = new URLSearchParams(location.search).get("k");
+    const $ = (id) => document.getElementById(id);
+    let st = null, dragging = false;
+    const fmt = (s) => { s = Math.max(0, Math.floor(s || 0)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+      return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
+
+    async function call(cmd, body) {
+      try {
+        const r = await fetch(`/r/${encodeURIComponent(key)}/${cmd}`, body === undefined ? { cache: "no-store" } :
+          { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        if (r.status === 403) { $("err").textContent = "Schlüssel ungültig – QR-Code in LakuenCast neu scannen."; return; }
+        render(await r.json());
+      } catch (e) { $("err").textContent = "LakuenCast nicht erreichbar. Läuft es am PC? Gleiches WLAN?"; }
+    }
+
+    function render(s) {
+      if (!s) return;
+      st = s;
+      $("err").textContent = s.error || "";
+      $("dev").textContent = s.device || "kein Gerät";
+      $("dev").classList.toggle("on", !!s.connected);
+      const m = s.media || {};
+      const labels = { idle: "Bereit", starting: "Startet …", mirroring: "Bildschirm wird gespiegelt", casting: "Video" };
+      $("title").textContent = s.mode === "idle" ? "Nichts läuft" : (s.title || "Läuft");
+      $("state").textContent = m.playerState === "PAUSED" ? "Pausiert" : m.playerState === "BUFFERING" ? "Lädt …" : labels[s.mode] || "";
+      const video = s.mode === "casting" && m.duration;
+      $("prog").hidden = !video;
+      if (video) {
+        $("cur").textContent = fmt(m.currentTime); $("dur").textContent = fmt(m.duration);
+        $("fill").style.width = Math.min(100, 100 * m.currentTime / m.duration) + "%";
+      }
+      $("controls").classList.toggle("off", s.mode !== "casting");
+      $("pp").textContent = m.playerState === "PAUSED" ? "▶" : "❚❚";
+      const v = s.volume || {};
+      if (!dragging && typeof v.level === "number") $("vol").value = Math.round(v.level * 100);
+      $("mute").textContent = v.muted ? "🔇" : "🔊";
+      $("stop").classList.toggle("off", s.mode === "idle");
+      $("mirror").classList.toggle("off", s.mode === "mirroring" || s.mode === "starting");
+    }
+
+    $("pp").onclick = () => call(st && st.media && st.media.playerState === "PAUSED" ? "play" : "pause", {});
+    document.querySelectorAll("[data-seek]").forEach((b) => b.onclick = () => call("seek", { delta: +b.dataset.seek }));
+    $("next").onclick = () => { call("next", {}); $("state").textContent = "Nächste Folge wird geholt …"; };
+    $("stop").onclick = () => call("stop", {});
+    $("mirror").onclick = () => call("mirror", {});
+    $("mute").onclick = () => call("mute", { on: !(st && st.volume && st.volume.muted) });
+    $("vol").oninput = () => { dragging = true; };
+    $("vol").onchange = async () => { await call("volume", { level: $("vol").value / 100 }); dragging = false; };
+
+    call("status");
+    setInterval(() => call("status"), 1500);
+  </script>
+</body>
+</html>

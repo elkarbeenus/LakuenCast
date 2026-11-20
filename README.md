@@ -5,6 +5,10 @@ Bild **und Ton** vom PC auf den Chromecast übertragen, auch auf ältere Modelle
 - **Bildschirm spiegeln mit Ton.** Brave überträgt beim Bildschirm-Streamen unter Linux keinen Ton, LakuenCast schon.
 - **Videos direkt an den Fernseher senden.** Mit der Browser-Erweiterung [LakuenWatcher](https://github.com/elkarbeenus/lakuenwatcher) läuft das Video in voller Qualität auf dem Chromecast. Nach jeder Folge kommt automatisch die nächste.
 - Findet Chromecasts im Heimnetz automatisch. Notfalls trägst du die IP-Adresse von Hand ein.
+- **Handy als Fernbedienung**: Den QR-Code in LakuenCast mit dem iPhone scannen. Dann gehen Pause, Spulen, Lautstärke, Spiegeln und „Nächste Folge“ von der Couch aus.
+- **PC-Ton beim Spiegeln stumm**: Der Ton kommt nur aus dem Fernseher.
+- **Eigene Videodateien senden**: Datei wählen oder ins Fenster ziehen. Passende MP4-Dateien laufen direkt, alles andere wird beim Abspielen umgewandelt.
+- **Geringe Verzögerung** beim Spiegeln (experimentell): etwa 1–2 s statt 3–6 s
 - Lautstärke, Pause und Spulen direkt in LakuenCast
 - Auf Wunsch Autostart beim Hochfahren, im Hintergrund
 - **Update mit einem Klick** im Programm
@@ -27,10 +31,19 @@ Tipp: Lege das AppImage an einen festen Ort, z. B. `~/Programme/`. Startmenü un
 
 LakuenCast nutzt Port **47800**. Steuern lässt es sich nur vom eigenen PC aus. Der Chromecast darf nur den Livestream und die Videos abrufen, die gerade laufen.
 
+## Handy-Fernbedienung
+
+LakuenCast zeigt einen QR-Code und eine Adresse wie `http://192.168.178.20:47800/remote?k=…`. Scanne ihn mit der iPhone-Kamera, das Handy muss im selben WLAN sein. Im Browser gehst du dann auf Teilen → **Zum Home-Bildschirm**, so liegt die Fernbedienung wie eine App auf dem Handy.
+
+Der Schlüssel in der Adresse schützt die Fernbedienung, damit niemand sonst im WLAN steuern kann. „Neuer Schlüssel“ macht alte Links ungültig.
+
+„Nächste Folge“ funktioniert, wenn das Video mit LakuenWatcher an den Fernseher gesendet wurde.
+
 ## Bekannte Grenzen
 
 - **Wayland:** Das Bild bleibt schwarz. Der SteamOS-Desktop-Modus nutzt X11, dort klappt es.
-- **Ton auf PC und Fernseher gleichzeitig:** Beim Spiegeln spielt der PC den Ton weiter. Dreh die PC-Lautsprecher einfach leiser.
+- **Geringe Verzögerung:** Das ist ein Versuch. Ruckelt es auf deinem Chromecast, schalte es wieder aus.
+- **Umgewandelte Dateien:** Bei Dateien, die umgewandelt werden müssen (z. B. MKV mit HEVC), geht Spulen nur im schon umgewandelten Teil.
 - **Hoster:** Einzelne Hoster lassen sich nicht durchreichen. Dann hilft „Bildschirm spiegeln“.
 
 ## Entwicklung
@@ -47,6 +60,10 @@ lakuencast/castv2.py    Chromecast-Protokoll (TLS + Protobuf, von Hand)
 lakuencast/mdns.py      Chromecasts im Netzwerk finden
 lakuencast/mirror.py    Bildschirm + Ton → HLS (ffmpeg)
 lakuencast/proxy.py     Video-Durchreiche, Playlists umschreiben
+lakuencast/filecast.py  eigene Videodateien (direkt oder umwandeln)
+lakuencast/pcaudio.py   PC-Ton beim Spiegeln umleiten
+lakuencast/qr.py        QR-Code für die Handy-Fernbedienung
+lakuencast/web/remote.html  Handy-Fernbedienung
 lakuencast/server.py    HTTP-Server (Oberfläche, API, Stream)
 lakuencast/updater.py   Update aus dem Programm
 lakuencast/gui.py       eigenes Fenster + Taskleisten-Symbol (Qt)

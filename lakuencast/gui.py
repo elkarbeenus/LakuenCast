@@ -12,13 +12,14 @@ import threading
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QIcon, QPixmap
-from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit,
+from PySide6.QtGui import QAction, QColor, QIcon, QImage, QPixmap
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QLineEdit,
                                QListWidget, QListWidgetItem, QMenu, QProgressBar, QPushButton, QSizePolicy,
                                QSlider, QSystemTrayIcon, QVBoxLayout, QWidget)
 
-from . import desktop
+from . import desktop, qr
 from .app import App
+from .filecast import VIDEO_EXT
 
 ICON = Path(__file__).parent / "web" / "icon.png"
 
@@ -56,6 +57,8 @@ QProgressBar::chunk { background: #7c5cff; border-radius: 3px; }
 QSlider::groove:horizontal { height: 6px; background: #262336; border-radius: 3px; }
 QSlider::sub-page:horizontal { background: #7c5cff; border-radius: 3px; }
 QSlider::handle:horizontal { background: #f2f0fa; width: 16px; margin: -5px 0; border-radius: 8px; }
+QFrame#dropHint { background: rgba(124,92,255,.18); border: 2px dashed #7c5cff; border-radius: 14px; }
+QLabel#qr { background: #ffffff; border-radius: 10px; padding: 6px; }
 QCheckBox::indicator { width: 18px; height: 18px; border-radius: 5px; border: 1px solid #4a4566; background: #262336; }
 QCheckBox::indicator:checked { background: #7c5cff; border-color: #7c5cff; }
 """
@@ -237,7 +240,10 @@ class MainWindow(QWidget):
         self.playpause.clicked.connect(self.on_playpause)
         fwd = QPushButton("+30 s")
         fwd.clicked.connect(lambda: self.run("seek", self.app.seek_relative, 30))
-        for b in (back, self.playpause, fwd):
+        nxt = QPushButton("⏭ Nächste Folge")
+        nxt.setToolTip("Holt über LakuenWatcher die nächste Folge")
+        nxt.clicked.connect(self.app.request_next)
+        for b in (back, self.playpause, fwd, nxt):
             cr.addWidget(b)
         cr.addStretch(1)
         nlay.addWidget(self.controls)
@@ -272,7 +278,48 @@ class MainWindow(QWidget):
         self.volume.sliderReleased.connect(self.on_volume)
         v.addWidget(self.volume)
         lay.addLayout(v)
+        self.mute_pc = QCheckBox("PC-Ton beim Spiegeln stumm (Ton nur am Fernseher)")
+        self.mute_pc.toggled.connect(lambda on: self.app.set_option(mute_pc=on))
+        lay.addWidget(self.mute_pc)
+        self.low_latency = QCheckBox("Geringe Verzögerung beim Spiegeln (experimentell)")
+        self.low_latency.toggled.connect(lambda on: self.app.set_option(low_latency=on))
+        lay.addWidget(self.low_latency)
+        self.file_btn = QPushButton("🎬  Videodatei senden …   (oder hierher ziehen)")
+        self.file_btn.clicked.connect(self.on_file)
+        lay.addWidget(self.file_btn)
         root.addWidget(card)
+
+        # Handy-Fernbedienung
+        card, lay = self._card()
+        lay.addWidget(cls(QLabel("📱 Handy als Fernbedienung"), "h2"))
+        rr = QHBoxLayout()
+        self.qr_label = QLabel()
+        self.qr_label.setObjectName("qr")
+        self.qr_label.setFixedSize(132, 132)
+        self.qr_label.setAlignment(Qt.AlignCenter)
+        rr.addWidget(self.qr_label)
+        rtext = QVBoxLayout()
+        rinfo = cls(QLabel("Mit der iPhone-Kamera scannen (gleiches WLAN). Dann gehen Pause, Spulen, "
+                           "Lautstärke und „Nächste Folge“ von der Couch. Tipp: „Zum Home-Bildschirm“."), "small")
+        rinfo.setWordWrap(True)
+        rtext.addWidget(rinfo)
+        self.remote_url = QLabel()
+        self.remote_url.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.remote_url.setWordWrap(True)
+        self.remote_url.setStyleSheet("color:#9b83ff;font-size:12px")
+        rtext.addWidget(self.remote_url)
+        newkey = QPushButton("Neuer Schlüssel")
+        newkey.setToolTip("Alte Links/QR-Codes funktionieren danach nicht mehr")
+        newkey.clicked.connect(self.on_newkey)
+        rtext.addWidget(newkey, 0, Qt.AlignLeft)
+        rtext.addStretch(1)
+        rr.addLayout(rtext, 1)
+        lay.addLayout(rr)
+        root.addWidget(card)
+        self._qr_for = None
+
+        # Hinweis beim Hineinziehen
+        self.setAcceptDrops(True)
 
         # Brave / Autostart
         card, lay = self._card()
@@ -351,6 +398,42 @@ class MainWindow(QWidget):
 
         self.manual.clear()
         self.run("add", add)
+
+    def on_file(self):
+        pattern = "Videos (" + " ".join(f"*{e}" for e in VIDEO_EXT) + ")"
+        path, _ = QFileDialog.getOpenFileName(self, "Videodatei senden", str(Path.home()), pattern)
+        if path:
+            self.run("file", self.app.cast_file, path)
+
+    def dragEnterEvent(self, event):
+        urls = event.mimeData().urls() if event.mimeData().hasUrls() else []
+        if urls and urls[0].isLocalFile() and urls[0].toLocalFile().lower().endswith(VIDEO_EXT):
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        path = event.mimeData().urls()[0].toLocalFile()
+        self.run("file", self.app.cast_file, path)
+
+    def on_newkey(self):
+        self.app.config.new_remote_key()
+        self._qr_for = None
+        self.refresh()
+
+    def _render_qr(self, url: str):
+        if url == self._qr_for:
+            return
+        self._qr_for = url
+        m = qr.encode(url)
+        n = len(m)
+        img = QImage(n + 2, n + 2, QImage.Format_RGB32)
+        img.fill(QColor("white"))
+        black = QColor("black").rgb()
+        for r, row in enumerate(m):
+            for c, v in enumerate(row):
+                if v:
+                    img.setPixel(c + 1, r + 1, black)
+        self.qr_label.setPixmap(QPixmap.fromImage(img).scaled(120, 120, Qt.KeepAspectRatio, Qt.FastTransformation))
+        self.remote_url.setText(url)
 
     def on_mirror(self):
         self.run("mirror", self.app.start_mirror, self.quality.currentData())
@@ -486,6 +569,19 @@ class MainWindow(QWidget):
         self.autostart.blockSignals(True)
         self.autostart.setChecked(st["autostart"])
         self.autostart.blockSignals(False)
+        opts = st.get("options") or {}
+        for box, key in ((self.mute_pc, "mute_pc"), (self.low_latency, "low_latency")):
+            box.blockSignals(True)
+            box.setChecked(bool(opts.get(key)))
+            box.blockSignals(False)
+        self.file_btn.setEnabled("file" not in self.busy and mode != "starting")
+        self.file_btn.setText("Bereite Datei vor …" if "file" in self.busy else "🎬  Videodatei senden …   (oder hierher ziehen)")
+        self._qr_tick = getattr(self, "_qr_tick", 0) + 1
+        if self._qr_for is None or self._qr_tick % 15 == 0:  # IP selten neu ermitteln
+            try:
+                self._render_qr(self.app.remote_url())
+            except Exception:  # noqa: BLE001
+                pass
 
         # Hinweise
         if st.get("error"):

@@ -8,6 +8,8 @@ import sys
 import unittest
 from pathlib import Path
 
+import tempfile as _tf
+os.environ.setdefault("XDG_CONFIG_HOME", _tf.mkdtemp(prefix="lakuencast-gui-config-"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ["LAKUENCAST_NO_UPDATE_CHECK"] = "1"
@@ -47,6 +49,8 @@ class TestGui(unittest.TestCase):
         st = self.app.status()
         self.shot("1-start", st)
         self.assertFalse(self.win.now_card.isVisible())
+        self.assertIsNotNone(self.win.qr_label.pixmap())
+        self.assertIn("/remote?k=", self.win.remote_url.text())
         self.assertEqual(self.win.devices.count(), 2)
 
     def test_casting_with_update(self):
