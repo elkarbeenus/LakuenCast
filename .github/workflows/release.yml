@@ -23,9 +23,17 @@ jobs:
           python-version: "3.12"
 
       - name: Werkzeuge
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb ffmpeg openssl >/dev/null
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb ffmpeg openssl libegl1 libgl1 libxkbcommon0 libxkbcommon-x11-0 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libxcb-xinerama0 libfontconfig1 libdbus-1-3 \
+            fonts-noto-color-emoji >/dev/null
+          pip install --quiet "PySide6-Essentials==6.8.1"
 
       - name: Tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+          LAKUENCAST_SCREENS: ${{ github.workspace }}/screens
         run: python tests/ci_run.py
 
       - name: Version lesen
@@ -81,6 +89,9 @@ jobs:
           print("Version im AppImage:", st["update"]["installedDisplay"])
           PY
           kill $PID
+          # Eigenes Fenster aus dem AppImage rendern (Beweisbild)
+          QT_QPA_PLATFORM=offscreen ./dist/LakuenCast-x86_64.AppImage --screenshot "$PWD/screens/0-appimage.png" --port 47898
+          ls -la screens
 
       - name: Release veröffentlichen
         if: steps.ver.outputs.skip == 'false'
@@ -96,3 +107,18 @@ jobs:
           gh release create "${{ steps.ver.outputs.tag }}" \
             dist/LakuenCast-x86_64.AppImage dist/LakuenCast-x86_64.AppImage.sha256 \
             --target "${{ github.sha }}" --title "${{ steps.ver.outputs.title }}" --notes-file notes.md
+
+      - name: Bildschirmfotos ins Repo (Branch ci-screens)
+        if: always()
+        run: |
+          [ -d screens ] || exit 0
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git fetch origin ci-screens --depth 1 2>/dev/null || true
+          git switch --orphan ci-screens-tmp
+          git rm -rf --quiet . 2>/dev/null || true
+          cp screens/*.png .
+          git add *.png
+          git commit -q -m "Screenshots ${GITHUB_SHA::7}"
+          git push -f origin HEAD:ci-screens
+

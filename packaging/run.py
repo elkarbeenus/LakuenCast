@@ -3,6 +3,7 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "vendor"))  # PySide6 (Qt)
 sys.path.insert(0, HERE)
 
 # Das eingebaute Python kennt die Zertifikate von SteamOS/Arch nicht von selbst.

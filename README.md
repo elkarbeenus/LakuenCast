@@ -13,7 +13,7 @@ Bild **und Ton** vom PC auf den Chromecast übertragen, auch auf ältere Modelle
 
 1. Unter [Releases](https://github.com/elkarbeenus/LakuenCast/releases/latest) die Datei `LakuenCast-x86_64.AppImage` herunterladen.
 2. In Dolphin: Rechtsklick → **Eigenschaften** → **Berechtigungen** → **Ausführbar** anhaken.
-3. Doppelklick. LakuenCast öffnet sich als eigenes Fenster und erscheint danach auch im Startmenü.
+3. Doppelklick. LakuenCast öffnet sich als eigenes Fenster mit Symbol in der Taskleiste und erscheint danach auch im Startmenü. Schließt du das Fenster, läuft LakuenCast in der Taskleiste weiter; „Beenden“ gibt es per Rechtsklick auf das Symbol.
 
 Tipp: Lege das AppImage an einen festen Ort, z. B. `~/Programme/`. Startmenü und Autostart zeigen auf diesen Pfad.
 
@@ -35,7 +35,7 @@ LakuenCast nutzt Port **47800**. Steuern lässt es sich nur vom eigenen PC aus. 
 
 ## Entwicklung
 
-Reines Python 3 ohne Abhängigkeiten, ffmpeg steckt im AppImage.
+Python 3, Oberfläche mit Qt (PySide6). Ohne PySide6 öffnet sich die Oberfläche im Browser. ffmpeg und Qt stecken im AppImage.
 
 ```bash
 python3 -m lakuencast            # starten
@@ -49,7 +49,8 @@ lakuencast/mirror.py    Bildschirm + Ton → HLS (ffmpeg)
 lakuencast/proxy.py     Video-Durchreiche, Playlists umschreiben
 lakuencast/server.py    HTTP-Server (Oberfläche, API, Stream)
 lakuencast/updater.py   Update aus dem Programm
-lakuencast/web/         Oberfläche
+lakuencast/gui.py       eigenes Fenster + Taskleisten-Symbol (Qt)
+lakuencast/web/         Browser-Oberfläche (Ersatz ohne Qt)
 packaging/              AppImage-Bau
 ```
 

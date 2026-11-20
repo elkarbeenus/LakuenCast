@@ -139,6 +139,8 @@ class Handler(BaseHTTPRequestHandler):
                 app.updater.check()
             elif path == "/api/update/install":
                 app.updater.install_async(on_restart=app.stop)
+            elif path == "/api/show":
+                app.show_requested = True
             elif path == "/api/dismiss":
                 app.error = None
                 app.message = None

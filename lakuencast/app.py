@@ -44,6 +44,7 @@ class App:
         self.finished_seq = 0         # zählt hoch, wenn eine gecastete Folge zu Ende ist
         self._finished_msid = None
         self.updater = Updater()
+        self.show_requested = False   # zweiter Start → Fenster nach vorne holen
 
     # ---------------------------------------------------------------- Geräte
 
