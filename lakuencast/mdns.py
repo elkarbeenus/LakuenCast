@@ -6,8 +6,12 @@ Wir schicken eine Anfrage nach "_googlecast._tcp.local" an die mDNS-Gruppe
 
 from __future__ import annotations
 
+import re
+import select
+import shutil
 import socket
 import struct
+import subprocess
 import time
 from dataclasses import dataclass, field
 
@@ -121,33 +125,147 @@ def devices_from_records(records: list[tuple[str, int, object]], sender_ip: str 
     return found
 
 
-def discover(timeout: float = 3.0) -> list[Device]:
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 255)
-    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)
-    sock.bind(("", 0))
-    sock.settimeout(0.3)
+def local_ipv4s() -> list[str]:
+    """Eigene IPv4-Adressen (ohne 127.x), damit wir auf jedem Netzwerk fragen."""
+    ips: list[str] = []
+    try:
+        out = subprocess.run(["ip", "-4", "-o", "addr", "show", "up"], capture_output=True, text=True,
+                             timeout=3).stdout
+        for line in out.splitlines():
+            parts = line.split()
+            if "inet" in parts:
+                ip = parts[parts.index("inet") + 1].split("/")[0]
+                if not ip.startswith("127.") and ip not in ips:
+                    ips.append(ip)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    try:  # Adresse der Standardroute (es wird nichts gesendet)
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        if ip not in ips:
+            ips.insert(0, ip)
+    except OSError:
+        pass
+    return ips
+
+
+def _unicast_socket(ip: str | None) -> socket.socket | None:
+    """Fragt von einem freien Port; Antwort kommt direkt zurück (Legacy-Unicast)."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 255)
+        if ip:
+            s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(ip))
+        s.bind((ip or "", 0))
+        s.setblocking(False)
+        return s
+    except OSError:
+        return None
+
+
+def _multicast_socket(ips: list[str]) -> socket.socket | None:
+    """Lauscht auf Port 5353 in der mDNS-Gruppe (manche Geräte antworten nur dorthin)."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if hasattr(socket, "SO_REUSEPORT"):
+            try:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            except OSError:
+                pass
+        s.bind(("", 5353))
+        joined = False
+        for ip in ips or ["0.0.0.0"]:
+            try:
+                mreq = socket.inet_aton(MDNS_ADDR[0]) + socket.inet_aton(ip)
+                s.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+                joined = True
+            except OSError:
+                pass
+        if not joined:
+            s.close()
+            return None
+        s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 255)
+        s.setblocking(False)
+        return s
+    except OSError:
+        return None
+
+
+def parse_avahi(output: str) -> list[Device]:
+    """Ausgabe von `avahi-browse -rpt _googlecast._tcp` lesen."""
+    found = []
+    for line in output.splitlines():
+        if not line.startswith("="):
+            continue
+        f = line.split(";")
+        if len(f) < 10 or f[2] != "IPv4":
+            continue
+        txt = {}
+        for m in re.finditer(r'"([^"]*)"', ";".join(f[9:])):
+            if "=" in m.group(1):
+                k, v = m.group(1).split("=", 1)
+                txt[k] = v
+        name = f[3].replace("\\032", " ")
+        found.append(Device(id=txt.get("id", f[3]), name=txt.get("fn") or name, host=f[7],
+                            port=int(f[8] or 8009), model=txt.get("md", ""), extra=txt))
+    return found
+
+
+def discover_avahi(timeout: float = 6.0) -> list[Device]:
+    """Ersatzweg über den System-Dienst avahi (unter SteamOS meist vorhanden)."""
+    tool = shutil.which("avahi-browse")
+    if not tool:
+        return []
+    try:
+        out = subprocess.run([tool, "-rpt", "-k", "_googlecast._tcp"], capture_output=True, text=True,
+                             timeout=timeout).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    return parse_avahi(out)
+
+
+def discover(timeout: float = 4.0) -> list[Device]:
+    ips = local_ipv4s()
+    socks = [s for s in (_unicast_socket(ip) for ip in (ips or [None])) if s]
+    mcast = _multicast_socket(ips)
+    if mcast:
+        socks.append(mcast)
     query = build_query()
     devices: dict[str, Device] = {}
     end = time.time() + timeout
     next_send = 0.0
     try:
-        while time.time() < end:
+        while time.time() < end and socks:
             if time.time() >= next_send:
-                try:
-                    sock.sendto(query, MDNS_ADDR)
-                except OSError:
-                    pass
+                for s in socks:
+                    try:
+                        if s is mcast:
+                            for ip in ips:
+                                s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(ip))
+                                s.sendto(query, MDNS_ADDR)
+                        else:
+                            s.sendto(query, MDNS_ADDR)
+                    except OSError:
+                        pass
                 next_send = time.time() + 1.0
-            try:
-                data, addr = sock.recvfrom(9000)
-            except socket.timeout:
-                continue
-            try:
-                for d in devices_from_records(parse_response(data), addr[0]):
-                    devices[d.id] = d
-            except (IndexError, struct.error, UnicodeDecodeError):
-                continue
+            readable, _, _ = select.select(socks, [], [], 0.3)
+            for s in readable:
+                try:
+                    data, addr = s.recvfrom(9000)
+                except OSError:
+                    continue
+                try:
+                    for d in devices_from_records(parse_response(data), addr[0]):
+                        devices[d.id] = d
+                except (IndexError, struct.error, UnicodeDecodeError, ValueError):
+                    continue
     finally:
-        sock.close()
+        for s in socks:
+            s.close()
+    if not devices:
+        for d in discover_avahi():
+            devices[d.id] = d
     return sorted(devices.values(), key=lambda d: d.name.lower())

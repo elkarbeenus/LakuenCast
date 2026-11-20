@@ -1,8 +1,5 @@
-Erste Version von LakuenCast.
+LakuenCast v0.1.1: Chromecast-Suche verbessert.
 
-- Eigenes Fenster mit Symbol in der Taskleiste
-- Chromecasts im Heimnetz automatisch finden (oder IP von Hand)
-- Bildschirm mit Ton auf den Fernseher spiegeln (720p/1080p)
-- Videos von LakuenWatcher annehmen und an den Chromecast durchreichen, Auto-Next
-- Lautstärke, Pause, Spulen, Autostart, Startmenü-Eintrag
-- Update mit einem Klick im Programm
+- Fragt auf allen Netzwerken des PCs und lauscht zusätzlich auf Antworten in der mDNS-Gruppe, wie es ältere Chromecasts (Gen 1/2) brauchen
+- Ersatzweg über den System-Dienst avahi
+- Sucht automatisch alle 20 Sekunden neu, solange kein Gerät gefunden ist

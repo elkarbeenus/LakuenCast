@@ -93,6 +93,7 @@ def main(argv: list[str] | None = None) -> int:
 
     desktop.install_menu_entry()
     app.scan_async()
+    threading.Thread(target=_rescan_until_found, args=(app,), daemon=True).start()
     threading.Thread(target=app.updater.check, daemon=True).start()
 
     gui = None if args.no_window else load_gui()
@@ -120,6 +121,14 @@ def main(argv: list[str] | None = None) -> int:
     app.stop()
     srv.shutdown()
     return 0
+
+
+def _rescan_until_found(app: App) -> None:
+    """Solange kein Chromecast gefunden ist, alle 20 s neu suchen."""
+    while True:
+        time.sleep(20)
+        if not app.devices:
+            app.scan()
 
 
 def _periodic_update_check(app: App) -> None:

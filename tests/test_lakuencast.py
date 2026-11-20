@@ -68,6 +68,17 @@ class TestMdns(unittest.TestCase):
         d = devs[0]
         self.assertEqual((d.name, d.host, d.port, d.model, d.id), ("Wohnzimmer", "192.168.1.50", 8009, "Chromecast", "abc123"))
 
+    def test_avahi_output(self):
+        line = ('=;wlan0;IPv4;Chromecast-1a2b;_googlecast._tcp;local;1a2b.local;192.168.178.40;8009;'
+                '"rs=" "fn=Wohnzimmer TV" "md=Chromecast" "id=1a2b3c"')
+        devs = mdns.parse_avahi("+;wlan0;IPv4;x;_googlecast._tcp;local\n" + line)
+        self.assertEqual(len(devs), 1)
+        self.assertEqual((devs[0].name, devs[0].host, devs[0].model, devs[0].id),
+                         ("Wohnzimmer TV", "192.168.178.40", "Chromecast", "1a2b3c"))
+
+    def test_discover_runs(self):
+        self.assertIsInstance(mdns.discover(timeout=1.0), list)
+
     def test_query_is_valid(self):
         q = mdns.build_query()
         self.assertEqual(struct.unpack(">H", q[4:6])[0], 1)
