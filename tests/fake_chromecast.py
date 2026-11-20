@@ -43,6 +43,7 @@ class FakeChromecast:
         self.conn = None
         self.media_session = 0
         self.lock = threading.Lock()
+        self.errors: list[str] = []
         threading.Thread(target=self._accept, daemon=True).start()
 
     def _accept(self):
@@ -50,7 +51,8 @@ class FakeChromecast:
             raw, _ = self.sock.accept()
             try:
                 self.conn = self.ctx.wrap_socket(raw, server_side=True)
-            except ssl.SSLError:
+            except (ssl.SSLError, OSError) as e:
+                self.errors.append(f"handshake: {e!r}")
                 continue
             threading.Thread(target=self._serve, args=(self.conn,), daemon=True).start()
 
@@ -98,8 +100,8 @@ class FakeChromecast:
                 elif ns == NS_MEDIA:
                     self._send(conn, "web-1", src, NS_MEDIA, {"type": "MEDIA_STATUS", "requestId": rid, "status": [
                         {"mediaSessionId": self.media_session, "playerState": "PAUSED" if typ == "PAUSE" else "PLAYING"}]})
-        except (ConnectionError, OSError, ssl.SSLError):
-            pass
+        except (ConnectionError, OSError, ssl.SSLError) as e:
+            self.errors.append(f"serve: {e!r}")
 
     def _get(self, url):
         try:

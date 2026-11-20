@@ -168,7 +168,7 @@ class TestIntegration(unittest.TestCase):
         origin = f"http://127.0.0.1:{self.origin.server_address[1]}"
         r = self.post("/api/cast", {"url": f"{origin}/v/master.m3u8", "title": "Folge 1",
                                     "headers": {"Referer": "https://serie.example/folge-1", "X-Evil": "no"}})
-        self.assertTrue(r["ok"], r)
+        self.assertTrue(r["ok"], (r.get("error"), self.cc.errors))
         self.assertEqual(r["status"]["mode"], "casting")
         media = self.cc.loaded[-1]
         self.assertEqual(media["contentType"], "application/x-mpegurl")
