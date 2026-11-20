@@ -19,7 +19,7 @@ curl -fsSL -o python.AppImage "$PY_URL"
 chmod +x python.AppImage
 ./python.AppImage --appimage-extract >/dev/null
 APPDIR="$WORK/squashfs-root"
-chmod -R u+rwX "$APPDIR"
+chmod -R u+rwX,go+rX,go-w "$APPDIR"
 # Desktop-/Metadaten des Python-AppImages entfernen (sonst Konflikt beim Bauen)
 rm -rf "$APPDIR/usr/share/applications" "$APPDIR/usr/share/metainfo" "$APPDIR/usr/share/icons"
 
@@ -65,6 +65,7 @@ if ! echo "$DEVICES" | grep -q x11grab; then
 fi
 
 echo "== AppImage bauen"
+chmod -R u+rwX,go+rX,go-w "$APPDIR"
 curl -fsSL -o appimagetool "$TOOL_URL"
 chmod +x appimagetool
 if ! ARCH=x86_64 ./appimagetool --no-appstream "$APPDIR" "$OUT/LakuenCast-x86_64.AppImage" > tool.log 2>&1; then
