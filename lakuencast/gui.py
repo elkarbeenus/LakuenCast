@@ -56,7 +56,8 @@ QProgressBar::chunk { background: #7c5cff; border-radius: 3px; }
 QSlider::groove:horizontal { height: 6px; background: #262336; border-radius: 3px; }
 QSlider::sub-page:horizontal { background: #7c5cff; border-radius: 3px; }
 QSlider::handle:horizontal { background: #f2f0fa; width: 16px; margin: -5px 0; border-radius: 8px; }
-QCheckBox::indicator { width: 18px; height: 18px; }
+QCheckBox::indicator { width: 18px; height: 18px; border-radius: 5px; border: 1px solid #4a4566; background: #262336; }
+QCheckBox::indicator:checked { background: #7c5cff; border-color: #7c5cff; }
 """
 
 
@@ -428,8 +429,8 @@ class MainWindow(QWidget):
                 self.devices.addItem(item)
                 if sel and sel["id"] == d["id"]:
                     item.setSelected(True)
-            h = sum(self.devices.sizeHintForRow(i) + 8 for i in range(self.devices.count()))
-            self.devices.setFixedHeight(max(0, h + 4))
+            h = sum(max(self.devices.sizeHintForRow(i), 44) + 14 for i in range(self.devices.count()))
+            self.devices.setFixedHeight(max(0, h + 6))
         self.devices.setVisible(bool(st["devices"]))
         scanning = st["scanning"] or "scan" in self.busy
         self.empty.setVisible(not st["devices"])

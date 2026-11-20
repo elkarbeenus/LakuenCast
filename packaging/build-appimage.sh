@@ -2,6 +2,7 @@
 # Baut LakuenCast-x86_64.AppImage (läuft in GitHub Actions).
 # Bestandteile: Python (python-appimage), LakuenCast, ffmpeg (statisch, BtbN).
 set -euo pipefail
+trap 'echo "::error title=AppImage-Bau::Zeile $LINENO fehlgeschlagen: $BASH_COMMAND"' ERR
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="${WORK:-$ROOT/build}"
 OUT="${OUT:-$ROOT/dist}"
@@ -37,7 +38,7 @@ cp "$ROOT/packaging/run.py" "$APPDIR/opt/lakuencast/run.py"
 find "$APPDIR/opt/lakuencast" -name "__pycache__" -prune -exec rm -rf {} +
 
 echo "== Qt (PySide6) für das eigene Fenster"
-"$APPDIR/AppRun.python" -m pip install --disable-pip-version-check --no-cache-dir --quiet \
+"$APPDIR/AppRun.python" -m pip install --disable-pip-version-check --no-cache-dir \
   --target "$APPDIR/opt/lakuencast/vendor" "PySide6-Essentials==${PYSIDE_VERSION:-6.8.1}"
 QT="$APPDIR/opt/lakuencast/vendor/PySide6"
 # Nicht benötigte Teile entfernen (Qml/Quick, Designer, Werkzeuge) – spart viel Platz
