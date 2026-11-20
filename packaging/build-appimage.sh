@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Baut LakuenCast-x86_64.AppImage (läuft in GitHub Actions).
+# Bestandteile: Python (python-appimage), LakuenCast, ffmpeg (statisch, BtbN).
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+WORK="${WORK:-$ROOT/build}"
+OUT="${OUT:-$ROOT/dist}"
+PY_URL="${PY_URL:-https://github.com/niess/python-appimage/releases/download/python3.12/python3.12.14-cp312-cp312-manylinux2014_x86_64.AppImage}"
+FFMPEG_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz"
+TOOL_URL="https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
+export APPIMAGE_EXTRACT_AND_RUN=1
+
+rm -rf "$WORK" && mkdir -p "$WORK" "$OUT"
+cd "$WORK"
+
+echo "== Python: $PY_URL"
+curl -fsSL -o python.AppImage "$PY_URL"
+chmod +x python.AppImage
+./python.AppImage --appimage-extract >/dev/null
+APPDIR="$WORK/squashfs-root"
+
+# Eigenes AppRun, das Python-AppRun bleibt als AppRun.python
+mv "$APPDIR/AppRun" "$APPDIR/AppRun.python"
+rm -f "$APPDIR"/*.desktop "$APPDIR"/*.png "$APPDIR"/*.svg "$APPDIR/.DirIcon"
+install -m 755 "$ROOT/packaging/AppRun" "$APPDIR/AppRun"
+cp "$ROOT/packaging/lakuencast.desktop" "$APPDIR/lakuencast.desktop"
+cp "$ROOT/packaging/lakuencast.png" "$APPDIR/lakuencast.png"
+ln -sf lakuencast.png "$APPDIR/.DirIcon"
+
+echo "== LakuenCast"
+mkdir -p "$APPDIR/opt/lakuencast"
+cp -r "$ROOT/lakuencast" "$APPDIR/opt/lakuencast/"
+cp "$ROOT/packaging/run.py" "$APPDIR/opt/lakuencast/run.py"
+find "$APPDIR/opt/lakuencast" -name "__pycache__" -prune -exec rm -rf {} +
+
+echo "== ffmpeg"
+curl -fsSL -o ffmpeg.tar.xz "$FFMPEG_URL"
+tar -xJf ffmpeg.tar.xz
+mkdir -p "$APPDIR/usr/bin"
+install -m 755 ffmpeg-*/bin/ffmpeg "$APPDIR/usr/bin/ffmpeg"
+DEVICES="$("$APPDIR/usr/bin/ffmpeg" -hide_banner -devices 2>/dev/null || true)"
+echo "$DEVICES" | grep -E "x11grab|pulse" || true
+if ! echo "$DEVICES" | grep -q x11grab; then
+  echo "::error::Das gebündelte ffmpeg kann kein x11grab"; exit 1
+fi
+
+echo "== AppImage bauen"
+curl -fsSL -o appimagetool "$TOOL_URL"
+chmod +x appimagetool
+ARCH=x86_64 ./appimagetool --no-appstream "$APPDIR" "$OUT/LakuenCast-x86_64.AppImage"
+(cd "$OUT" && sha256sum LakuenCast-x86_64.AppImage > LakuenCast-x86_64.AppImage.sha256)
+
+echo "== Probelauf"
+"$OUT/LakuenCast-x86_64.AppImage" --version
+ls -la "$OUT"

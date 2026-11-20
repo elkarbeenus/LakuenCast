@@ -1,0 +1,96 @@
+name: Release
+
+# Neues Release: VERSION in lakuencast/version.py erhöhen und auf main pushen.
+#   "0.2.0"         → Release v0.2.0
+#   "0.2.0-test.1"  → Testbuild v0.2.0-test.1 (im Titel markiert, für den Updater sichtbar)
+# Gibt es das Release schon, wird nur gebaut und getestet.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Werkzeuge
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb ffmpeg openssl libfuse2 >/dev/null
+
+      - name: Tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Version lesen
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NAME="$(python -c 'import sys; sys.path.insert(0,"."); from lakuencast.version import VERSION; print(VERSION)')"
+          TAG="v$NAME"
+          BASE="$(echo "$NAME" | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+')"
+          TESTNR="$(echo "$NAME" | grep -oiE 'test[.-]?[0-9]+' | grep -oE '[0-9]+$' || true)"
+          if [ -n "$TESTNR" ]; then TEST=true; TITLE="LakuenCast v$BASE test $TESTNR (Testbuild)"; else TEST=false; TITLE="LakuenCast v$BASE"; fi
+          if gh release view "$TAG" >/dev/null 2>&1; then SKIP=true; else SKIP=false; fi
+          { echo "tag=$TAG"; echo "test=$TEST"; echo "title=$TITLE"; echo "skip=$SKIP"; } >> "$GITHUB_OUTPUT"
+
+      - name: Python-AppImage finden
+        id: py
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          URL="$(gh api repos/niess/python-appimage/releases/tags/python3.12 \
+            --jq '[.assets[] | select(.name | test("cp312-cp312-manylinux2014_x86_64.AppImage$"))][0].browser_download_url' || true)"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Python-AppImage: ${URL:-Standard}"
+
+      - name: AppImage bauen
+        env:
+          PY_URL: ${{ steps.py.outputs.url }}
+        run: |
+          [ -n "$PY_URL" ] || unset PY_URL
+          bash packaging/build-appimage.sh
+
+      - name: AppImage testen
+        run: |
+          set -e
+          export LAKUENCAST_NO_UPDATE_CHECK=1
+          ./dist/LakuenCast-x86_64.AppImage --version
+          ./dist/LakuenCast-x86_64.AppImage --no-window --port 47899 &
+          PID=$!
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:47899/api/status -o status.json; then break; fi
+            sleep 0.5
+          done
+          cat status.json
+          grep -q '"app": "LakuenCast"' status.json || { echo "::error::AppImage startet nicht"; exit 1; }
+          curl -fsS http://127.0.0.1:47899/ | grep -q "LakuenCast" || { echo "::error::Oberfläche fehlt"; exit 1; }
+          python - <<'PY'
+          import json
+          st = json.load(open("status.json"))
+          assert st["app"] == "LakuenCast", st
+          print("Version im AppImage:", st["update"]["installedDisplay"])
+          PY
+          kill $PID
+
+      - name: Release veröffentlichen
+        if: steps.ver.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ steps.ver.outputs.test }}" = "true" ]; then
+            { echo "**Testbuild** – wird durch das nächste Release ersetzt."; echo; cat RELEASE_NOTES.md; } > notes.md
+          else
+            cp RELEASE_NOTES.md notes.md
+          fi
+          # Testbuilds absichtlich nicht als Pre-release, damit der Updater sie findet.
+          gh release create "${{ steps.ver.outputs.tag }}" \
+            dist/LakuenCast-x86_64.AppImage dist/LakuenCast-x86_64.AppImage.sha256 \
+            --target "${{ github.sha }}" --title "${{ steps.ver.outputs.title }}" --notes-file notes.md

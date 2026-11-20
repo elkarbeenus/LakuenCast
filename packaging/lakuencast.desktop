@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=LakuenCast
+Comment=Bild und Ton auf den Chromecast übertragen
+Exec=lakuencast
+Icon=lakuencast
+Terminal=false
+Categories=AudioVideo;Video;Network;
+StartupWMClass=LakuenCast

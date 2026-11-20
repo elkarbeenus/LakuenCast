@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LakuenCast</title>
+  <link rel="icon" href="icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <img src="icon.png" alt="" width="36" height="36">
+    <div class="h-text">
+      <h1>LakuenCast</h1>
+      <div class="muted" id="version">…</div>
+    </div>
+    <div class="conn" id="conn"><span class="dot"></span><span id="conn-text">Nicht verbunden</span></div>
+  </header>
+
+  <div class="banner update" id="update" hidden>
+    <div class="grow">
+      <strong>Update <span id="upd-version"></span> verfügbar</strong>
+      <div class="small" id="upd-text">Lädt die neue Version, ersetzt das AppImage und startet LakuenCast neu.</div>
+      <div class="bar" id="upd-bar" hidden><div id="upd-fill"></div></div>
+    </div>
+    <button class="primary" id="upd-btn">Update</button>
+  </div>
+
+  <div class="banner warn" id="notice" hidden>
+    <div class="grow" id="notice-text"></div>
+    <button class="ghost" id="notice-x">✕</button>
+  </div>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Fernseher</h2>
+      <button class="ghost" id="scan">Suchen</button>
+    </div>
+    <div id="devices" class="devices"></div>
+    <details class="manual">
+      <summary>Gerät nicht dabei? IP-Adresse eingeben</summary>
+      <form id="add-form">
+        <input id="add-host" placeholder="z. B. 192.168.178.40" autocomplete="off">
+        <button class="ghost" type="submit">Hinzufügen</button>
+      </form>
+    </details>
+  </section>
+
+  <section class="card" id="now" hidden>
+    <div class="card-head">
+      <h2 id="now-title">Läuft</h2>
+      <span class="pill" id="now-state"></span>
+    </div>
+    <div class="progress" id="progress-wrap" hidden>
+      <span id="t-cur">0:00</span>
+      <div class="bar"><div id="t-fill"></div></div>
+      <span id="t-dur">0:00</span>
+    </div>
+    <div class="controls" id="media-controls" hidden>
+      <button class="ghost" data-seek="-10">−10 s</button>
+      <button class="primary" id="playpause">Pause</button>
+      <button class="ghost" data-seek="30">+30 s</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="actions">
+      <button class="big primary" id="mirror">🖥️ Bildschirm spiegeln<br><small>mit Ton</small></button>
+      <button class="big danger" id="stop">■ Stopp</button>
+    </div>
+    <div class="row">
+      <label for="quality">Qualität</label>
+      <select id="quality">
+        <option value="720p">720p (flüssig, empfohlen)</option>
+        <option value="1080p">1080p (schärfer, mehr Last)</option>
+      </select>
+    </div>
+    <div class="row">
+      <label for="volume">Lautstärke Fernseher</label>
+      <input type="range" id="volume" min="0" max="100" step="1">
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Videos aus Brave senden</h2>
+    <p class="small muted">In der Erweiterung <b>LakuenWatcher</b> auf „An Fernseher senden“ klicken. Das Video läuft
+      dann direkt auf dem Fernseher in voller Qualität, und nach jeder Folge kommt automatisch die nächste.</p>
+    <label class="row switch">
+      <span>Beim Hochfahren im Hintergrund starten</span>
+      <input type="checkbox" id="autostart">
+    </label>
+  </section>
+
+  <footer class="muted small">
+    <button class="link" id="check">Nach Update suchen</button>
+    · <a href="https://github.com/elkarbeenus/LakuenCast" target="_blank">GitHub</a>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
