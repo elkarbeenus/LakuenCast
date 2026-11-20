@@ -185,6 +185,9 @@ class MainWindow(QWidget):
         lay.addLayout(row)
         self.devices = QListWidget()
         self.devices.setIconSize(QSize(22, 22))
+        self.devices.setWordWrap(True)
+        self.devices.setTextElideMode(Qt.ElideNone)
+        self.devices.setUniformItemSizes(False)
         self.devices.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.devices.itemClicked.connect(self.on_device)
         lay.addWidget(self.devices)
@@ -424,12 +427,14 @@ class MainWindow(QWidget):
             self.devices.clear()
             for d in st["devices"]:
                 sub = " · ".join(x for x in (d["model"], d["host"]) if x)
-                item = QListWidgetItem(f"📺  {d['name']}\n      {sub}")
+                item = QListWidgetItem(f"📺  {d['name']}\n      {sub}" if sub else f"📺  {d['name']}")
                 item.setData(Qt.UserRole, d["id"])
+                lines = 2 if sub else 1
+                item.setSizeHint(QSize(0, 22 + 20 * lines))
                 self.devices.addItem(item)
                 if sel and sel["id"] == d["id"]:
                     item.setSelected(True)
-            h = sum(max(self.devices.sizeHintForRow(i), 44) + 14 for i in range(self.devices.count()))
+            h = sum(self.devices.item(i).sizeHint().height() + 10 for i in range(self.devices.count()))
             self.devices.setFixedHeight(max(0, h + 6))
         self.devices.setVisible(bool(st["devices"]))
         scanning = st["scanning"] or "scan" in self.busy
