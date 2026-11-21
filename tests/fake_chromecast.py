@@ -46,6 +46,7 @@ class FakeChromecast:
         self.media_session = 0
         self.lock = threading.Lock()
         self.errors: list[str] = []
+        self.seeks: list = []
         self.outboxes: dict = {}
         threading.Thread(target=self._accept, daemon=True).start()
 
@@ -102,12 +103,15 @@ class FakeChromecast:
                     self._send(conn, "receiver-0", src, NS_RECEIVER,
                                {"type": "RECEIVER_STATUS", "requestId": rid, "status": self._status()})
                 elif ns == NS_MEDIA and typ == "LOAD":
-                    self.loaded.append(d["media"])
+                    self.loaded.append({**d["media"], "_start": d.get("currentTime", 0)})
                     self.media_session += 1
                     threading.Thread(target=self._play, args=(d["media"],), daemon=True).start()
                     self._send(conn, "web-1", src, NS_MEDIA, {"type": "MEDIA_STATUS", "requestId": rid, "status": [
-                        {"mediaSessionId": self.media_session, "playerState": "BUFFERING", "media": {**d["media"], "duration": 1200}}]})
+                        {"mediaSessionId": self.media_session, "playerState": "PLAYING", "currentTime": d.get("currentTime", 0),
+                         "media": {**d["media"], "duration": 1200}}]})
                 elif ns == NS_MEDIA:
+                    if typ == "SEEK":
+                        self.seeks.append(d.get("currentTime"))
                     self._send(conn, "web-1", src, NS_MEDIA, {"type": "MEDIA_STATUS", "requestId": rid, "status": [
                         {"mediaSessionId": self.media_session, "playerState": "PAUSED" if typ == "PAUSE" else "PLAYING"}]})
         except (ConnectionError, OSError, ssl.SSLError) as e:

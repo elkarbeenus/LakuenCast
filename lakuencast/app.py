@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import os
 import socket
+import subprocess
 import threading
 import time
 import urllib.parse
@@ -45,6 +47,7 @@ class App:
         self.quality = self.config["quality"] or "720p"
         self.file: FileCast | None = None
         self.next_seq = 0             # "Nächste Folge" auf der Handy-Fernbedienung
+        self.power_requested: str | None = None
         self.proxy = proxymod.Proxy()
         self.finished_seq = 0         # zählt hoch, wenn eine gecastete Folge zu Ende ist
         self._finished_msid = None
@@ -232,6 +235,28 @@ class App:
     def remote_url(self) -> str:
         return f"http://{self.lan_ip()}:{self.port}/remote?k={self.config['remote_key']}"
 
+    def power(self, action: str) -> None:
+        """PC in den Energiesparmodus schicken oder herunterfahren (vom Handy aus)."""
+        cmds = {"suspend": ["systemctl", "suspend"], "poweroff": ["systemctl", "poweroff"]}
+        if action not in cmds:
+            raise ValueError("Unbekannte Aktion")
+        self.stop()
+        self.power_requested = action
+        if os.environ.get("LAKUENCAST_POWER_DRYRUN"):
+            return
+
+        def later():
+            time.sleep(1.5)  # Antwort ans Handy geht vorher noch raus
+            try:
+                r = subprocess.run(cmds[action], capture_output=True, text=True, timeout=20)
+                if r.returncode != 0:
+                    self.error = ("PC lässt sich nicht " + ("schlafen legen" if action == "suspend" else "herunterfahren")
+                                  + ": " + (r.stderr.strip() or "keine Berechtigung"))
+            except (OSError, subprocess.TimeoutExpired) as e:
+                self.error = f"Fehler: {e}"
+
+        threading.Thread(target=later, daemon=True).start()
+
     def request_next(self) -> None:
         self.next_seq += 1
 
@@ -241,7 +266,7 @@ class App:
 
     # ---------------------------------------------------------------- Video casten
 
-    def cast_url(self, url: str, headers: dict | None = None, title: str = "") -> dict:
+    def cast_url(self, url: str, headers: dict | None = None, title: str = "", start_at: float = 0) -> dict:
         if not url.startswith(("http://", "https://")):
             raise ValueError("Ungültige Video-Adresse")
         with self.lock:
@@ -288,7 +313,8 @@ class App:
                 name = "video.mp4"
 
             proxied = proxymod.Proxy.make_url(base, sess.token, url, name)
-            cast.load(proxied, content_type, title=title or "LakuenCast", live=False, hls_segment_format=seg_fmt)
+            cast.load(proxied, content_type, title=title or "LakuenCast", live=False, hls_segment_format=seg_fmt,
+                      start=start_at)
             with self.lock:
                 self.mode = "casting"
                 self.title = title or "Video"
@@ -321,10 +347,32 @@ class App:
         if self.cast:
             self.cast.play()
 
+    def current_time(self) -> float:
+        """Aktuelle Position, zwischen zwei Meldungen des Chromecasts hochgerechnet."""
+        if not self.cast:
+            return 0.0
+        st = self.cast.media_status or {}
+        cur = float(st.get("currentTime") or 0)
+        if st.get("playerState") == "PLAYING" and self.cast.media_status_at:
+            cur += (time.time() - self.cast.media_status_at) * float(st.get("playbackRate") or 1)
+        dur = (st.get("media") or {}).get("duration")
+        return min(cur, float(dur)) if dur else cur
+
     def seek_relative(self, seconds: float):
         if self.cast:
-            cur = float(self.cast.media_status.get("currentTime") or 0)
-            self.cast.seek(max(0.0, cur + seconds))
+            self.seek_to(self.current_time() + seconds)
+
+    def seek_to(self, seconds: float):
+        if not self.cast:
+            return
+        dur = (self.cast.media_status.get("media") or {}).get("duration")
+        target = max(0.0, float(seconds))
+        if dur:
+            target = min(target, float(dur) - 1)
+        self.cast.seek(target)
+        # sofort anzeigen, auch bevor der Chromecast antwortet
+        self.cast.media_status["currentTime"] = target
+        self.cast.media_status_at = time.time()
 
     def set_volume(self, level: float):
         cast = self._connect()
@@ -341,7 +389,7 @@ class App:
                 media = {
                     "playerState": st.get("playerState"),
                     "idleReason": st.get("idleReason"),
-                    "currentTime": st.get("currentTime"),
+                    "currentTime": self.current_time() if st else None,
                     "duration": (st.get("media") or {}).get("duration"),
                 }
                 volume = self.cast.volume

@@ -140,7 +140,8 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/mirror":
                 app.start_mirror(data.get("quality"))
             elif path == "/api/cast":
-                app.cast_url(str(data.get("url", "")), data.get("headers") or {}, str(data.get("title", "")))
+                app.cast_url(str(data.get("url", "")), data.get("headers") or {}, str(data.get("title", "")),
+                             float(data.get("startAt") or 0))
             elif path == "/api/stop":
                 app.stop()
             elif path == "/api/pause":
@@ -149,6 +150,8 @@ class Handler(BaseHTTPRequestHandler):
                 app.play()
             elif path == "/api/seek":
                 app.seek_relative(float(data.get("delta", 0)))
+            elif path == "/api/seekto":
+                app.seek_to(float(data.get("time", 0)))
             elif path == "/api/volume":
                 app.set_volume(float(data.get("level", 0.5)))
             elif path == "/api/autostart":
@@ -196,6 +199,8 @@ class Handler(BaseHTTPRequestHandler):
                     app.play()
                 elif cmd == "seek":
                     app.seek_relative(float(data.get("delta", 0)))
+                elif cmd == "seekto":
+                    app.seek_to(float(data.get("time", 0)))
                 elif cmd == "volume":
                     app.set_volume(float(data.get("level", 0.5)))
                 elif cmd == "mute":
@@ -205,6 +210,8 @@ class Handler(BaseHTTPRequestHandler):
                     app.stop()
                 elif cmd == "next":
                     app.request_next()
+                elif cmd == "power":
+                    app.power(str(data.get("action", "")))
                 elif cmd == "mirror":
                     import threading as _t
                     _t.Thread(target=app.start_mirror, daemon=True).start()

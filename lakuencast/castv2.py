@@ -119,6 +119,7 @@ class CastDevice:
 
         self.receiver_status: dict = {}
         self.media_status: dict = {}
+        self.media_status_at = 0.0
         self.transport_id: str | None = None
         self.session_id: str | None = None
         self._connected_transports: set[str] = set()
@@ -283,6 +284,7 @@ class CastDevice:
                 self.media_status = merged
             else:
                 self.media_status = {}
+            self.media_status_at = time.time()
             if self.on_media_status:
                 try:
                     self.on_media_status(self.media_status)
@@ -341,7 +343,7 @@ class CastDevice:
 
     # ---- Media ----
     def load(self, url: str, content_type: str, title: str = "", live: bool = False,
-             hls_segment_format: str | None = None) -> dict | None:
+             hls_segment_format: str | None = None, start: float = 0) -> dict | None:
         tid = self.launch_media_app()
         media = {
             "contentId": url,
@@ -355,7 +357,7 @@ class CastDevice:
         self.media_status = {}
         return self._request(tid, NS_MEDIA, {
             "type": "LOAD", "sessionId": self.session_id, "media": media,
-            "autoplay": True, "currentTime": 0,
+            "autoplay": True, "currentTime": max(0.0, float(start or 0)),
         }, timeout=30)
 
     def _media_cmd(self, typ: str, **extra) -> dict | None:

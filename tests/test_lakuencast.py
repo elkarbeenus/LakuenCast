@@ -237,6 +237,7 @@ class TestIntegration(unittest.TestCase):
         self.assertTrue(r["ok"], (r.get("error"), self.cc.errors))
         self.assertEqual(r["status"]["mode"], "casting")
         media = self.cc.loaded[-1]
+        self.assertEqual(media["_start"], 0)
         self.assertEqual(media["contentType"], "application/x-mpegurl")
         self.assertIn("/p/", media["contentId"])
 
@@ -289,6 +290,34 @@ class TestIntegration(unittest.TestCase):
             urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{self.port}/r/falsch/next", data=b"{}"),
                                    timeout=5)
         self.assertIn(f"/remote?k={key}", self.app.remote_url())
+
+        # Zeitleiste ziehen → absoluter Sprung
+        self.post("/api/add", {"host": f"127.0.0.1:{self.cc.port}"})
+        origin = f"http://127.0.0.1:{self.origin.server_address[1]}"
+        self.post("/api/cast", {"url": f"{origin}/v/master.m3u8", "headers": {"Referer": "https://serie.example/folge-1"},
+                                "startAt": 612.5})
+        self.assertEqual(self.cc.loaded[-1]["_start"], 612.5)  # mitten in der Folge weiter
+        req = urllib.request.Request(f"http://127.0.0.1:{self.port}/r/{key}/seekto", data=b'{"time": 754}',
+                                     headers={"Content-Type": "application/json"})
+        r = json.load(urllib.request.urlopen(req, timeout=5))
+        self.assertTrue(r["ok"], r)
+        for _ in range(30):
+            if self.cc.seeks:
+                break
+            time.sleep(0.1)
+        self.assertEqual(self.cc.seeks[-1], 754)
+        self.assertGreaterEqual(r["media"]["currentTime"], 754)
+
+        # PC schlafen legen / ausschalten (Probelauf, ohne echt auszuführen)
+        os.environ["LAKUENCAST_POWER_DRYRUN"] = "1"
+        req = urllib.request.Request(f"http://127.0.0.1:{self.port}/r/{key}/power", data=b'{"action": "suspend"}',
+                                     headers={"Content-Type": "application/json"})
+        self.assertTrue(json.load(urllib.request.urlopen(req, timeout=5))["ok"])
+        self.assertEqual(self.app.power_requested, "suspend")
+        self.assertEqual(self.app.mode, "idle")
+        req = urllib.request.Request(f"http://127.0.0.1:{self.port}/r/{key}/power", data=b'{"action": "rm -rf"}',
+                                     headers={"Content-Type": "application/json"})
+        self.assertFalse(json.load(urllib.request.urlopen(req, timeout=5))["ok"])
 
     @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "ffmpeg fehlt")
     def test_6_cast_files(self):
