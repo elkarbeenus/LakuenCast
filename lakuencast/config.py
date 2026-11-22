@@ -13,6 +13,7 @@ DEFAULTS = {
     "remote_key": "",        # Schlüssel für die Handy-Fernbedienung
     "mute_pc": True,         # PC-Ton beim Spiegeln stumm (Ton nur am Fernseher)
     "low_latency": False,    # Spiegeln mit geringer Verzögerung (experimentell)
+    "input_enabled": False,  # Maus, Tastatur & Vorschau vom Handy erlauben
     "quality": "720p",
     "last_device": "",
 }

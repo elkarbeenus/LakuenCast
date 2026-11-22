@@ -48,6 +48,8 @@ class App:
         self.file: FileCast | None = None
         self.next_seq = 0             # "Nächste Folge" auf der Handy-Fernbedienung
         self.power_requested: str | None = None
+        self._xinput = None
+        self.preview_proc = None
         self.proxy = proxymod.Proxy()
         self.finished_seq = 0         # zählt hoch, wenn eine gecastete Folge zu Ende ist
         self._finished_msid = None
@@ -261,8 +263,17 @@ class App:
         self.next_seq += 1
 
     def set_option(self, **kw) -> None:
-        allowed = {k: bool(v) for k, v in kw.items() if k in ("mute_pc", "low_latency")}
+        allowed = {k: bool(v) for k, v in kw.items() if k in ("mute_pc", "low_latency", "input_enabled")}
         self.config.set(**allowed)
+
+    # ---------------------------------------------------------------- Maus & Tastatur (Handy)
+
+    def get_xinput(self):
+        from .xinput import XInput
+        with self.lock:
+            if self._xinput is None:
+                self._xinput = XInput()
+            return self._xinput
 
     # ---------------------------------------------------------------- Video casten
 
@@ -409,7 +420,8 @@ class App:
                 "quality": self.quality,
                 "finishedSeq": self.finished_seq,
                 "nextSeq": self.next_seq,
-                "options": {"mute_pc": bool(self.config["mute_pc"]), "low_latency": bool(self.config["low_latency"])},
+                "options": {"mute_pc": bool(self.config["mute_pc"]), "low_latency": bool(self.config["low_latency"]),
+                            "input_enabled": bool(self.config["input_enabled"])},
                 "pcMuted": bool(self.mirror and self.mirror.pc_muted),
                 "file": {"title": self.file.title, "mode": self.file.mode} if self.file else None,
                 "autostart": desktop.autostart_enabled(),

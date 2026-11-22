@@ -180,6 +180,90 @@
     .done .s { color: var(--muted); margin-top: 6px; }
     @keyframes in { from { opacity: 0; transform: translateY(10px); } }
     .card, .tiles { animation: in .5s var(--ease) both; }
+
+    /* ---------- Reiter unten ---------- */
+    body { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+    .tabbar { position: fixed; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+              z-index: 15; display: flex; gap: 4px; padding: 6px; border-radius: 24px; width: min(92vw, 420px);
+              background: rgba(22, 20, 34, .72); border: 1px solid var(--stroke);
+              backdrop-filter: blur(30px) saturate(160%); -webkit-backdrop-filter: blur(30px) saturate(160%);
+              box-shadow: 0 16px 40px rgba(0, 0, 0, .5); }
+    .tabbar button { flex: 1; height: 54px; border-radius: 18px; display: flex; flex-direction: column; align-items: center;
+                     justify-content: center; gap: 3px; font-size: 11.5px; font-weight: 650; color: var(--muted); }
+    .tabbar button svg { font-size: 22px; }
+    .tabbar button.on { color: #fff; background: linear-gradient(135deg, rgba(139,92,246,.9), rgba(99,102,241,.9));
+                        box-shadow: 0 6px 18px rgba(99,102,241,.45); }
+    .tab[hidden] { display: none !important; }
+
+    /* ---------- Maus & Tastatur ---------- */
+    .locked { text-align: center; padding: 34px 22px; }
+    .locked .big { width: 72px; height: 72px; margin: 0 auto 16px; border-radius: 24px; display: grid; place-items: center;
+                   font-size: 34px; background: var(--glass2); color: #c4b5fd; }
+    .locked h2 { margin: 0 0 8px; font-size: 21px; letter-spacing: -.01em; }
+    .locked p { margin: 0; color: var(--muted); font-size: 15px; }
+    .locked b { color: var(--text); }
+
+    .preview { position: relative; border-radius: 22px; overflow: hidden; background: #000; aspect-ratio: 16 / 9;
+               border: 1px solid var(--stroke); box-shadow: 0 10px 40px rgba(0,0,0,.45); margin-bottom: 12px; touch-action: none; }
+    .preview img { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: contain; display: block;
+                   -webkit-user-drag: none; pointer-events: none; }
+    .preview .ph { position: absolute; inset: 0; z-index: 0; display: grid; place-items: center; color: var(--muted); font-size: 14px; }
+    .preview .live, .preview .ripple { z-index: 2; }
+    .preview .live { position: absolute; left: 10px; top: 10px; display: flex; align-items: center; gap: 6px; padding: 5px 9px;
+                     border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: .08em; background: rgba(0,0,0,.55);
+                     backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+    .preview .live i { width: 7px; height: 7px; border-radius: 50%; background: #f43f5e; animation: blink 1.4s infinite; }
+    @keyframes blink { 50% { opacity: .3; } }
+    .preview .ripple { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%;
+                       border: 2px solid #fff; pointer-events: none; animation: rip .5s ease-out forwards; }
+    @keyframes rip { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.4); opacity: 0; } }
+    .preview.direct { outline: 2px solid rgba(34, 211, 238, .7); outline-offset: -2px; }
+
+    .seg { display: flex; padding: 4px; border-radius: 16px; background: var(--glass); border: 1px solid var(--stroke); margin-bottom: 12px; }
+    .seg button { flex: 1; height: 40px; border-radius: 12px; font-size: 14px; font-weight: 650; color: var(--muted);
+                  display: flex; align-items: center; justify-content: center; gap: 7px; }
+    .seg button svg { font-size: 17px; }
+    .seg button.on { background: var(--glass2); color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,.08); }
+
+    .pad { position: relative; height: 38vh; min-height: 220px; border-radius: 26px 26px 8px 8px; touch-action: none;
+           background:
+             radial-gradient(circle at 50% 40%, rgba(139, 92, 246, .16), transparent 60%),
+             radial-gradient(rgba(255,255,255,.07) 1px, transparent 1.5px) 0 0 / 18px 18px,
+             var(--glass);
+           border: 1px solid var(--stroke); overflow: hidden;
+           backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
+    .pad .hint { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; pointer-events: none;
+                 color: var(--muted); font-size: 13.5px; line-height: 1.6; transition: opacity .4s; }
+    .pad .hint b { color: var(--text); font-size: 16px; display: block; margin-bottom: 4px; }
+    .pad.used .hint { opacity: 0; }
+    .pad .touch { position: absolute; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; pointer-events: none;
+                  background: radial-gradient(circle, rgba(167, 139, 250, .5), rgba(167, 139, 250, 0) 70%); transition: opacity .2s; }
+    .pad.drag { border-color: rgba(34, 211, 238, .7); box-shadow: inset 0 0 0 1px rgba(34, 211, 238, .5); }
+    .mbtns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+    .mbtns button { height: 60px; background: var(--glass); border: 1px solid var(--stroke); font-weight: 650; font-size: 14px;
+                    color: var(--muted); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
+    .mbtns button:first-child { border-radius: 8px 8px 8px 26px; }
+    .mbtns button:last-child { border-radius: 8px 8px 26px 8px; }
+    .mbtns button.held, .mbtns button:active { background: var(--glass2); color: #fff; }
+
+    .kb { margin-top: 14px; }
+    .kbfield { display: flex; align-items: center; gap: 12px; height: 58px; padding: 0 16px; border-radius: 20px;
+               background: var(--glass); border: 1px solid var(--stroke); font-size: 16px; color: var(--muted); }
+    .kbfield svg { font-size: 22px; color: #c4b5fd; flex: none; }
+    .kbfield.focus { border-color: rgba(139, 92, 246, .8); box-shadow: 0 0 0 4px rgba(139, 92, 246, .18); color: var(--text); }
+    .kbfield .echo { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; direction: rtl; text-align: left; }
+    #kbin { position: absolute; left: -9999px; top: 0; width: 1px; height: 1px; opacity: 0; font-size: 16px; }
+    .keys { display: flex; gap: 8px; overflow-x: auto; padding: 12px 2px 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+    .keys::-webkit-scrollbar { display: none; }
+    .keys button { flex: none; min-width: 56px; height: 48px; padding: 0 14px; border-radius: 15px; font-size: 14px; font-weight: 700;
+                   background: var(--glass); border: 1px solid var(--stroke); display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .keys button svg { font-size: 18px; }
+    .keys .wide { min-width: 110px; }
+    .speed { display: flex; align-items: center; gap: 12px; margin-top: 14px; padding: 12px 16px; border-radius: 20px;
+             background: var(--glass); border: 1px solid var(--stroke); font-size: 14px; font-weight: 600; color: var(--muted); }
+    .net { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+    .net i { width: 7px; height: 7px; border-radius: 50%; background: #6b6880; }
+    .net.on i { background: var(--ok); }
     @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
   </style>
 </head>
@@ -200,6 +284,20 @@
     <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
     <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></symbol>
     <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></symbol>
+    <symbol id="i-remote" viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="3"/><circle cx="12" cy="8" r="2"/><path d="M12 14h.01M12 17h.01"/></symbol>
+    <symbol id="i-mouse" viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 7v4"/></symbol>
+    <symbol id="i-kb" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2.5"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></symbol>
+    <symbol id="i-pad" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 15h18M12 15v5"/></symbol>
+    <symbol id="i-tap" viewBox="0 0 24 24"><path d="M9 11V5.5a2 2 0 0 1 4 0V11"/><path d="M13 9.5a2 2 0 0 1 4 0V11a2 2 0 0 1 3 1.7V15a7 7 0 0 1-7 7h-1a7 7 0 0 1-5.4-2.6L4 16.5a2 2 0 0 1 3-2.6l2 2"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-enter" viewBox="0 0 24 24"><path d="M20 5v6a3 3 0 0 1-3 3H5"/><path d="M9 10l-4 4 4 4"/></symbol>
+    <symbol id="i-bksp" viewBox="0 0 24 24"><path d="M21 5H9l-6 7 6 7h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1z"/><path d="M17 9l-5 6M12 9l5 6"/></symbol>
+    <symbol id="i-full" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+    <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M12 14l4-4"/><path d="M3.3 17a9 9 0 1 1 17.4 0"/></symbol>
   </svg>
 
   <main id="app">
@@ -211,6 +309,7 @@
 
     <div class="err" id="err"></div>
 
+    <div class="tab" id="tab-remote">
     <section class="card now">
       <div class="eyebrow"><span class="eq"><b></b><b></b><b></b></span><span id="eyebrow">Bereit</span></div>
       <div class="title" id="title">Nichts läuft</div>
@@ -248,7 +347,73 @@
       <button class="tile sleep" id="sleep"><svg><use href="#i-moon"/></svg>Energiesparen</button>
       <button class="tile off" id="off"><svg><use href="#i-power"/></svg>Herunterfahren</button>
     </div>
+    </div>
+
+    <div class="tab" id="tab-mouse" hidden>
+      <section class="card locked" id="locked" hidden>
+        <div class="big"><svg><use href="#i-lock"/></svg></div>
+        <h2>Maus & Tastatur sind aus</h2>
+        <p>Am PC in LakuenCast unter „Handy als Fernbedienung“<br><b>Maus, Tastatur & Vorschau erlauben</b> anhaken.</p>
+      </section>
+
+      <div id="mousebox">
+        <div class="preview" id="preview">
+          <div class="ph" id="ph">Vorschau lädt …</div>
+          <img id="pimg" alt="">
+          <div class="live"><i></i>LIVE</div>
+        </div>
+
+        <div class="seg" id="mode">
+          <button class="on" data-mode="pad"><svg><use href="#i-pad"/></svg>Touchpad</button>
+          <button data-mode="direct"><svg><use href="#i-tap"/></svg>Aufs Bild tippen</button>
+        </div>
+
+        <div id="padbox">
+          <div class="pad" id="pad">
+            <div class="hint"><div><b>Touchpad</b>Wischen = Maus · Tippen = Klick<br>2 Finger tippen = Rechtsklick · 2 Finger wischen = Scrollen<br>2× tippen &amp; halten = Ziehen</div></div>
+          </div>
+          <div class="mbtns">
+            <button id="lbtn">Links</button>
+            <button id="rbtn">Rechts</button>
+          </div>
+        </div>
+
+        <div class="kb">
+          <label class="kbfield" id="kbfield" for="kbin">
+            <svg><use href="#i-kb"/></svg><span class="echo" id="echo">Tippen – wird am PC geschrieben</span>
+            <span class="net" id="net"><i></i></span>
+          </label>
+          <textarea id="kbin" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
+          <div class="keys">
+            <button data-key="Return" class="wide"><svg><use href="#i-enter"/></svg>Enter</button>
+            <button data-key="BackSpace"><svg><use href="#i-bksp"/></svg></button>
+            <button data-key="space" class="wide">Leertaste</button>
+            <button data-key="Escape">Esc</button>
+            <button data-key="Tab">Tab</button>
+            <button data-key="Left"><svg><use href="#i-left"/></svg></button>
+            <button data-key="Up"><svg><use href="#i-up"/></svg></button>
+            <button data-key="Down"><svg><use href="#i-down"/></svg></button>
+            <button data-key="Right"><svg><use href="#i-right"/></svg></button>
+            <button data-key="F11"><svg><use href="#i-full"/></svg>Vollbild</button>
+            <button data-key="F5">F5</button>
+            <button data-key="XF86AudioPlay"><svg><use href="#i-play"/></svg></button>
+            <button data-key="XF86AudioLowerVolume">Leiser</button>
+            <button data-key="XF86AudioRaiseVolume">Lauter</button>
+          </div>
+        </div>
+
+        <div class="speed">
+          <svg style="font-size:20px"><use href="#i-gauge"/></svg>Tempo
+          <input type="range" id="speed" min="5" max="40" step="1">
+        </div>
+      </div>
+    </div>
   </main>
+
+  <nav class="tabbar">
+    <button class="on" data-tab="remote"><svg><use href="#i-remote"/></svg>Fernbedienung</button>
+    <button data-tab="mouse"><svg><use href="#i-mouse"/></svg>Maus &amp; Tastatur</button>
+  </nav>
 
   <div class="sheet" id="sheet">
     <div class="bg" id="sheet-bg"></div>
@@ -331,6 +496,7 @@
       $("mute-ico").setAttribute("href", v.muted ? "#i-mute" : "#i-vol");
       $("stop").classList.toggle("dis", s.mode === "idle");
       $("mirror").classList.toggle("dis", s.mode === "mirroring" || s.mode === "starting");
+      if (typeof s.input === "boolean" && s.input !== inputAllowed) { inputAllowed = s.input; syncMouse(); }
     }
 
     // ---------- Zeitleiste zum Ziehen ----------
@@ -405,6 +571,236 @@
       $("app").innerHTML = `<div class="done"><div><div class="big">${sleep ? "🌙" : "👋"}</div>
         <div class="t">${sleep ? "PC schläft jetzt" : "PC fährt herunter"}</div><div class="s">Gute Nacht!</div></div></div>`;
     };
+
+
+    // =====================================================================
+    // Maus & Tastatur
+    // =====================================================================
+    let tab = "remote", sock = null, sockOk = false, retry = 0, inputAllowed = false;
+    let speed = +(localStorage.getItem("lc-speed") || 16);
+    $("speed").value = speed;
+    $("speed").oninput = () => { speed = +$("speed").value; localStorage.setItem("lc-speed", speed); };
+
+    function showTab(name) {
+      tab = name;
+      document.querySelectorAll(".tabbar button").forEach((b) => b.classList.toggle("on", b.dataset.tab === name));
+      $("tab-remote").hidden = name !== "remote";
+      $("tab-mouse").hidden = name !== "mouse";
+      buzz(6);
+      syncMouse();
+      window.scrollTo({ top: 0 });
+    }
+    document.querySelectorAll(".tabbar button").forEach((b) => b.onclick = () => showTab(b.dataset.tab));
+
+    function syncMouse() {
+      const active = tab === "mouse" && inputAllowed && !document.hidden;
+      $("locked").hidden = inputAllowed;
+      $("mousebox").hidden = !inputAllowed;
+      // Vorschau nur laden, solange der Reiter offen ist (spart Akku und PC-Leistung)
+      const img = $("pimg");
+      if (active && !img.dataset.on) {
+        img.dataset.on = "1";
+        img.src = `/r/${encodeURIComponent(key)}/preview.mjpg?fps=10&w=720&t=${Date.now()}`;
+        $("ph").textContent = "Vorschau lädt …";
+        // Bei MJPEG meldet nicht jeder Browser "geladen" – Hinweis nach kurzer Zeit ausblenden
+        setTimeout(() => { if (img.dataset.on && img.naturalWidth) $("ph").hidden = true; }, 1200);
+        setTimeout(() => { if (img.dataset.on && img.naturalWidth) $("ph").hidden = true; }, 3000);
+      } else if (!active && img.dataset.on) {
+        delete img.dataset.on;
+        img.removeAttribute("src");
+        $("ph").hidden = false;
+      }
+      if (active) connect(); else disconnect();
+    }
+    $("pimg").onload = () => { $("ph").hidden = true; };
+    $("pimg").onerror = () => { $("ph").textContent = "Keine Vorschau"; $("ph").hidden = false; };
+
+    function connect() {
+      if (sock) return;
+      const proto = location.protocol === "https:" ? "wss" : "ws";
+      sock = new WebSocket(`${proto}://${location.host}/r/${encodeURIComponent(key)}/ws`);
+      sock.onopen = () => { retry = 0; };
+      sock.onmessage = (e) => {
+        const m = JSON.parse(e.data);
+        if (m.ok) { sockOk = true; $("net").classList.add("on"); }
+        if (m.error) { showErr(m.error); }
+      };
+      sock.onclose = () => {
+        sock = null; sockOk = false; $("net").classList.remove("on");
+        if (tab === "mouse" && inputAllowed && !document.hidden) setTimeout(connect, Math.min(4000, 300 * ++retry));
+      };
+    }
+    function disconnect() { if (sock) { const s = sock; sock = null; s.onclose = null; s.close(); } sockOk = false; $("net").classList.remove("on"); }
+    const tx = (o) => { if (sock && sock.readyState === 1) sock.send(JSON.stringify(o)); };
+    setInterval(() => tx({ t: "ping" }), 15000);
+
+    // Bewegungen sammeln und einmal pro Bild schicken
+    let pdx = 0, pdy = 0, raf = 0;
+    function queueMove(dx, dy) {
+      pdx += dx; pdy += dy;
+      if (!raf) raf = requestAnimationFrame(() => {
+        raf = 0;
+        const x = Math.round(pdx), y = Math.round(pdy);
+        if (x || y) { tx({ t: "m", x, y }); pdx -= x; pdy -= y; }
+      });
+    }
+    // Beschleunigung: langsam = genau, schnell = weit
+    function accel(d, dt) {
+      const v = Math.abs(d) / Math.max(dt, 8) * 16;
+      return d * (speed / 10) * Math.min(4, 1 + v / 10);
+    }
+
+    // ---------- Touchpad-Gesten ----------
+    const pad = $("pad");
+    let touches = {}, startT = 0, moved = 0, maxFingers = 0, lastTapEnd = 0, dragging = false, scrollAcc = 0, scrollAccX = 0, lastT = 0;
+    function dot(id, x, y) {
+      let d = pad.querySelector(`.touch[data-id="${id}"]`);
+      if (!d) { d = document.createElement("div"); d.className = "touch"; d.dataset.id = id; pad.appendChild(d); }
+      const r = pad.getBoundingClientRect();
+      d.style.left = x - r.left + "px"; d.style.top = y - r.top + "px";
+    }
+    pad.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      pad.classList.add("used");
+      const now = performance.now();
+      if (!Object.keys(touches).length) {
+        startT = now; moved = 0; maxFingers = 0; scrollAcc = 0; scrollAccX = 0;
+        // Doppeltippen und halten = Ziehen
+        if (now - lastTapEnd < 280 && e.touches.length === 1) {
+          dragging = true; pad.classList.add("drag"); tx({ t: "d", b: "left" }); buzz(15);
+        }
+      }
+      for (const t of e.changedTouches) { touches[t.identifier] = { x: t.clientX, y: t.clientY }; dot(t.identifier, t.clientX, t.clientY); }
+      maxFingers = Math.max(maxFingers, e.touches.length);
+      lastT = now;
+    }, { passive: false });
+
+    pad.addEventListener("touchmove", (e) => {
+      e.preventDefault();
+      const now = performance.now(), dt = now - lastT; lastT = now;
+      let sx = 0, sy = 0, n = 0;
+      for (const t of e.changedTouches) {
+        const p = touches[t.identifier]; if (!p) continue;
+        sx += t.clientX - p.x; sy += t.clientY - p.y; n++;
+        p.x = t.clientX; p.y = t.clientY; dot(t.identifier, t.clientX, t.clientY);
+      }
+      if (!n) return;
+      const dx = sx / n, dy = sy / n;
+      moved += Math.abs(dx) + Math.abs(dy);
+      if (e.touches.length >= 2) {
+        // Zwei Finger: scrollen (natürlich wie am Handy)
+        scrollAcc += dy; scrollAccX += dx;
+        const steps = Math.trunc(scrollAcc / 22), stepsX = Math.trunc(scrollAccX / 30);
+        if (steps || stepsX) { tx({ t: "s", y: -steps, x: -stepsX }); scrollAcc -= steps * 22; scrollAccX -= stepsX * 30; }
+      } else {
+        queueMove(accel(dx, dt), accel(dy, dt));
+      }
+    }, { passive: false });
+
+    function endTouches(e) {
+      e.preventDefault();
+      for (const t of e.changedTouches) {
+        delete touches[t.identifier];
+        const d = pad.querySelector(`.touch[data-id="${t.identifier}"]`); if (d) d.remove();
+      }
+      if (Object.keys(touches).length) return;
+      const now = performance.now(), dur = now - startT;
+      if (dragging) {
+        dragging = false; pad.classList.remove("drag"); tx({ t: "u", b: "left" }); lastTapEnd = 0; return;
+      }
+      if (dur < 260 && moved < 12) {
+        if (maxFingers >= 3) { tx({ t: "c", b: "middle" }); }
+        else if (maxFingers === 2) { tx({ t: "c", b: "right" }); buzz(12); }
+        else { tx({ t: "c", b: "left" }); buzz(6); lastTapEnd = now; return; }
+      }
+      lastTapEnd = 0;
+    }
+    pad.addEventListener("touchend", endTouches, { passive: false });
+    pad.addEventListener("touchcancel", endTouches, { passive: false });
+
+    // Mit der Maus am Rechner testen (Pointer statt Touch)
+    let mDown = null;
+    pad.addEventListener("mousedown", (e) => { mDown = { x: e.clientX, y: e.clientY, t: performance.now(), moved: 0 }; pad.classList.add("used"); });
+    window.addEventListener("mousemove", (e) => { if (!mDown) return; const dx = e.clientX - mDown.x, dy = e.clientY - mDown.y;
+      mDown.moved += Math.abs(dx) + Math.abs(dy); mDown.x = e.clientX; mDown.y = e.clientY; queueMove(accel(dx, 16), accel(dy, 16)); });
+    window.addEventListener("mouseup", () => { if (mDown && mDown.moved < 6 && performance.now() - mDown.t < 260) tx({ t: "c", b: "left" }); mDown = null; });
+
+    // Knöpfe Links/Rechts: gedrückt halten = festhalten
+    for (const [id, b] of [["lbtn", "left"], ["rbtn", "right"]]) {
+      const el = $(id);
+      el.addEventListener("pointerdown", (e) => { e.preventDefault(); el.classList.add("held"); tx({ t: "d", b }); buzz(8); });
+      const up = () => { if (el.classList.contains("held")) { el.classList.remove("held"); tx({ t: "u", b }); } };
+      el.addEventListener("pointerup", up); el.addEventListener("pointerleave", up); el.addEventListener("pointercancel", up);
+    }
+
+    // ---------- Aufs Bild tippen ----------
+    let mode = "pad";
+    document.querySelectorAll("#mode button").forEach((b) => b.onclick = () => {
+      mode = b.dataset.mode; buzz(6);
+      document.querySelectorAll("#mode button").forEach((x) => x.classList.toggle("on", x === b));
+      $("preview").classList.toggle("direct", mode === "direct");
+      $("padbox").hidden = mode === "direct";
+      toast(mode === "direct" ? "Tippe aufs Bild – dort wird geklickt" : "Touchpad");
+    });
+    function imgPoint(e) {
+      const img = $("pimg"), r = img.getBoundingClientRect();
+      const iw = img.naturalWidth || 16, ih = img.naturalHeight || 9;
+      const scale = Math.min(r.width / iw, r.height / ih);
+      const w = iw * scale, h = ih * scale, ox = (r.width - w) / 2, oy = (r.height - h) / 2;
+      const fx = (e.clientX - r.left - ox) / w, fy = (e.clientY - r.top - oy) / h;
+      return fx >= 0 && fx <= 1 && fy >= 0 && fy <= 1 ? { fx, fy, px: e.clientX - r.left, py: e.clientY - r.top } : null;
+    }
+    function ripple(px, py) {
+      const d = document.createElement("div"); d.className = "ripple"; d.style.left = px + "px"; d.style.top = py + "px";
+      $("preview").appendChild(d); setTimeout(() => d.remove(), 600);
+    }
+    let pv = null, longTimer = 0;
+    $("preview").addEventListener("pointerdown", (e) => {
+      if (mode !== "direct") return;
+      const p = imgPoint(e); if (!p) return;
+      e.preventDefault();
+      pv = { ...p, start: performance.now(), long: false, x0: e.clientX, y0: e.clientY };
+      tx({ t: "a", x: p.fx, y: p.fy });
+      longTimer = setTimeout(() => { if (pv) { pv.long = true; tx({ t: "c", b: "right" }); buzz(20); ripple(p.px, p.py); } }, 550);
+    });
+    $("preview").addEventListener("pointermove", (e) => {
+      if (!pv) return;
+      if (Math.abs(e.clientX - pv.x0) + Math.abs(e.clientY - pv.y0) > 10) clearTimeout(longTimer);
+    });
+    $("preview").addEventListener("pointerup", (e) => {
+      if (!pv) return;
+      clearTimeout(longTimer);
+      if (!pv.long) { const p = imgPoint(e) || pv; tx({ t: "a", x: p.fx, y: p.fy }); tx({ t: "c", b: "left" }); ripple(p.px, p.py); buzz(8); }
+      pv = null;
+    });
+
+    // ---------- Tastatur ----------
+    const kbin = $("kbin");
+    let echo = "";
+    function showEcho() { $("echo").textContent = echo || "Tippen – wird am PC geschrieben"; }
+    kbin.addEventListener("focus", () => $("kbfield").classList.add("focus"));
+    kbin.addEventListener("blur", () => { $("kbfield").classList.remove("focus"); echo = ""; showEcho(); });
+    kbin.addEventListener("beforeinput", (e) => {
+      e.preventDefault();
+      const it = e.inputType;
+      if (it === "insertText" || it === "insertReplacementText" || it === "insertFromPaste") {
+        const v = e.data || (e.dataTransfer && e.dataTransfer.getData("text")) || "";
+        if (v) { tx({ t: "txt", v }); echo = (echo + v).slice(-60); }
+      } else if (it === "insertLineBreak" || it === "insertParagraph") {
+        tx({ t: "k", k: "Return" }); echo = "";
+      } else if (it.startsWith("deleteContentBackward") || it === "deleteWordBackward") {
+        tx({ t: "k", k: "BackSpace" }); echo = echo.slice(0, -1);
+      }
+      showEcho();
+    });
+    // Ersatz für ältere Browser ohne beforeinput
+    kbin.addEventListener("input", () => { if (kbin.value) { tx({ t: "txt", v: kbin.value }); echo = (echo + kbin.value).slice(-60); kbin.value = ""; showEcho(); } });
+    document.querySelectorAll("[data-key]").forEach((b) => b.addEventListener("click", (e) => {
+      e.preventDefault(); buzz(6); tx({ t: "k", k: b.dataset.key });
+      if (b.dataset.key === "BackSpace") { echo = echo.slice(0, -1); showEcho(); }
+    }));
+
+    document.addEventListener("visibilitychange", syncMouse);
 
     setVolFill();
     call("status");

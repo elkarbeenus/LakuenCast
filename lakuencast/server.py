@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import os
 import logging
 import mimetypes
 import threading
@@ -93,6 +94,10 @@ class Handler(BaseHTTPRequestHandler):
             if not self._remote_ok(key):
                 return self.send_error(403, "Falscher Schlüssel")
             return self._static("remote.html", head)
+        if path.startswith("/r/") and path.endswith("/ws"):
+            return self._ws_input(path)
+        if path.startswith("/r/") and path.endswith("/preview.mjpg"):
+            return self._preview(path, parts.query)
         if path.startswith("/r/"):
             return self._remote_api(path, None)
         if path == "/icon.png":
@@ -220,11 +225,131 @@ class Handler(BaseHTTPRequestHandler):
             st = app.status()
             vol = st.get("volume") or {}
             return self._json({"ok": True, "mode": st["mode"], "title": st["title"], "media": st["media"],
+                               "input": bool(app.config["input_enabled"]),
                                "volume": {"level": vol.get("level"), "muted": vol.get("muted")},
                                "device": (st.get("selected") or {}).get("name"),
                                "connected": st["connected"], "error": st["error"]})
         except Exception as e:  # noqa: BLE001
             return self._json({"ok": False, "error": str(e)})
+
+    # ------------------------------------------------------------ Maus & Tastatur (WebSocket)
+    def _input_allowed(self, path: str) -> bool:
+        parts = path.split("/")  # ['', 'r', key, 'ws']
+        return len(parts) == 4 and self._remote_ok(parts[2]) and bool(self.app.config["input_enabled"])
+
+    def _ws_input(self, path: str):
+        from . import ws
+        if not self._input_allowed(path):
+            return self.send_error(403)
+        key = self.headers.get("Sec-WebSocket-Key")
+        if not key or "websocket" not in (self.headers.get("Upgrade") or "").lower():
+            return self.send_error(400)
+        self.protocol_version = "HTTP/1.1"
+        self.send_response(101, "Switching Protocols")
+        self.send_header("Upgrade", "websocket")
+        self.send_header("Connection", "Upgrade")
+        self.send_header("Sec-WebSocket-Accept", ws.accept_key(key))
+        self.end_headers()
+        self.close_connection = True
+
+        def send(obj):
+            self.wfile.write(ws.encode_frame(json.dumps(obj).encode()))
+            self.wfile.flush()
+
+        try:
+            xi = self.app.get_xinput()
+        except Exception as e:  # noqa: BLE001
+            send({"error": str(e)})
+            return
+        w, h = xi.size
+        send({"ok": True, "screen": [w, h]})
+        try:
+            while True:
+                frame = ws.read_frame(self.rfile)
+                if frame is None:
+                    break
+                op, data = frame
+                if op == 0x8:  # schließen
+                    break
+                if op == 0x9:  # ping
+                    self.wfile.write(ws.encode_frame(data, 0xA))
+                    continue
+                if op != 0x1:
+                    continue
+                if not self.app.config["input_enabled"]:
+                    send({"error": "Maus & Tastatur wurden in LakuenCast ausgeschaltet."})
+                    break
+                try:
+                    self._handle_input(xi, json.loads(data))
+                except (ValueError, KeyError, TypeError) as e:
+                    send({"error": str(e)})
+        except (OSError, ConnectionError):
+            pass
+        finally:
+            xi.release_all()
+
+    @staticmethod
+    def _handle_input(xi, m: dict):
+        t = m.get("t")
+        if t == "m":
+            xi.move(float(m.get("x", 0)), float(m.get("y", 0)))
+        elif t == "a":
+            xi.move_to(float(m["x"]), float(m["y"]))
+        elif t == "c":
+            xi.click(str(m.get("b", "left")), bool(m.get("dbl")))
+        elif t == "d":
+            xi.button(str(m.get("b", "left")), True)
+        elif t == "u":
+            xi.button(str(m.get("b", "left")), False)
+        elif t == "s":
+            xi.scroll(int(m.get("y", 0)), int(m.get("x", 0)))
+        elif t == "k":
+            xi.key(str(m["k"]))
+        elif t == "txt":
+            xi.type_text(str(m.get("v", "")))
+        elif t == "ping":
+            pass
+        else:
+            raise ValueError("Unbekannte Eingabe")
+
+    # ------------------------------------------------------------ Live-Vorschau (MJPEG)
+    def _preview(self, path: str, query: str):
+        import subprocess
+        from .mirror import find_ffmpeg
+        parts = path.split("/")
+        if len(parts) != 4 or not self._remote_ok(parts[2]) or not self.app.config["input_enabled"]:
+            return self.send_error(403)
+        ffmpeg = find_ffmpeg()
+        if not ffmpeg:
+            return self.send_error(500, "ffmpeg fehlt")
+        q = urllib.parse.parse_qs(query)
+        fps = max(2, min(15, int((q.get("fps") or ["10"])[0])))
+        width = max(320, min(1280, int((q.get("w") or ["720"])[0])))
+        old = self.app.preview_proc
+        if old and old.poll() is None:
+            old.terminate()
+        cmd = [ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin",
+               "-f", "x11grab", "-framerate", str(fps), "-draw_mouse", "1", "-i", os.environ.get("DISPLAY", ":0"),
+               "-vf", f"scale={width}:-2:flags=fast_bilinear", "-q:v", "7",
+               "-f", "mpjpeg", "-boundary_tag", "lkframe", "pipe:1"]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        self.app.preview_proc = proc
+        self.send_response(200)
+        self.send_header("Content-Type", "multipart/x-mixed-replace;boundary=lkframe")
+        self.send_header("Cache-Control", "no-cache, no-store")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        try:
+            while True:
+                chunk = proc.stdout.read1(1 << 16)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass
+        finally:
+            if proc.poll() is None:
+                proc.terminate()
 
     # ------------------------------------------------------------ Eigene Datei
     def _file(self, path: str, head: bool):

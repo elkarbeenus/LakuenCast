@@ -308,6 +308,10 @@ class MainWindow(QWidget):
         self.remote_url.setWordWrap(True)
         self.remote_url.setStyleSheet("color:#9b83ff;font-size:12px")
         rtext.addWidget(self.remote_url)
+        self.input_ok = QCheckBox("Maus, Tastatur & Vorschau vom Handy erlauben")
+        self.input_ok.setToolTip("Damit lässt sich der PC vom Handy aus komplett bedienen")
+        self.input_ok.toggled.connect(lambda on: self.app.set_option(input_enabled=on))
+        rtext.addWidget(self.input_ok)
         newkey = QPushButton("Neuer Schlüssel")
         newkey.setToolTip("Alte Links/QR-Codes funktionieren danach nicht mehr")
         newkey.clicked.connect(self.on_newkey)
@@ -570,7 +574,7 @@ class MainWindow(QWidget):
         self.autostart.setChecked(st["autostart"])
         self.autostart.blockSignals(False)
         opts = st.get("options") or {}
-        for box, key in ((self.mute_pc, "mute_pc"), (self.low_latency, "low_latency")):
+        for box, key in ((self.mute_pc, "mute_pc"), (self.low_latency, "low_latency"), (self.input_ok, "input_enabled")):
             box.blockSignals(True)
             box.setChecked(bool(opts.get(key)))
             box.blockSignals(False)

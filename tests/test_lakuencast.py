@@ -107,6 +107,19 @@ class TestQr(unittest.TestCase):
             self.assertEqual(cv2.QRCodeDetector().detectAndDecode(img)[0], text)
 
 
+class TestWebSocket(unittest.TestCase):
+    def test_accept_key_rfc_example(self):
+        from lakuencast import ws
+        self.assertEqual(ws.accept_key("dGhlIHNhbXBsZSBub25jZQ=="), "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=")
+
+    def test_frames_roundtrip(self):
+        import io
+        from lakuencast import ws
+        for payload in (b'{"t":"m","x":3,"y":-2}', b"x" * 300):
+            op, data = ws.read_frame(io.BytesIO(ws.mask_frame(payload)))
+            self.assertEqual((op, data), (1, payload))
+
+
 class TestFilePlan(unittest.TestCase):
     def test_plan(self):
         from lakuencast.filecast import plan
@@ -378,6 +391,70 @@ class TestIntegration(unittest.TestCase):
             self.post("/api/stop")
         finally:
             self.post("/api/option", {"low_latency": False})
+            xvfb.terminate()
+            if old is None:
+                os.environ.pop("DISPLAY", None)
+            else:
+                os.environ["DISPLAY"] = old
+
+    @unittest.skipUnless(shutil.which("Xvfb") and shutil.which("ffmpeg"), "Xvfb/ffmpeg fehlt")
+    def test_8_mouse_keyboard_preview(self):
+        import base64
+        from lakuencast import ws
+        disp = ":95"
+        xvfb = subprocess.Popen(["Xvfb", disp, "-screen", "0", "1280x720x24"], stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL)
+        old = os.environ.get("DISPLAY")
+        os.environ["DISPLAY"] = disp
+        key = self.app.config["remote_key"]
+        try:
+            time.sleep(1)
+            self.app._xinput = None
+            # Aus → verboten
+            self.app.set_option(input_enabled=False)
+            with self.assertRaises(urllib.error.HTTPError) as e:
+                urllib.request.urlopen(f"http://127.0.0.1:{self.port}/r/{key}/preview.mjpg", timeout=5)
+            self.assertEqual(e.exception.code, 403)
+            self.app.set_option(input_enabled=True)
+
+            # WebSocket öffnen und Maus bewegen
+            s = socket.create_connection(("127.0.0.1", self.port), timeout=5)
+            wkey = base64.b64encode(b"0123456789abcdef").decode()
+            s.sendall((f"GET /r/{key}/ws HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                       f"Sec-WebSocket-Key: {wkey}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
+            rf = s.makefile("rb")
+            status = rf.readline().decode()
+            self.assertIn("101", status)
+            while rf.readline() not in (b"\r\n", b""):
+                pass
+            op, hello = ws.read_frame(rf)
+            self.assertEqual(json.loads(hello)["screen"], [1280, 720])
+            xi = self.app.get_xinput()
+            s.sendall(ws.mask_frame(json.dumps({"t": "a", "x": 0.5, "y": 0.5}).encode()))
+            s.sendall(ws.mask_frame(json.dumps({"t": "m", "x": 40, "y": -20}).encode()))
+            s.sendall(ws.mask_frame(json.dumps({"t": "c", "b": "left"}).encode()))
+            s.sendall(ws.mask_frame(json.dumps({"t": "txt", "v": "Hallo €"}).encode()))
+            s.sendall(ws.mask_frame(json.dumps({"t": "k", "k": "Return"}).encode()))
+            time.sleep(0.6)
+            self.assertEqual(xi.pointer(), (679, 339))
+            # Nicht erlaubte Taste → Fehlermeldung, Verbindung bleibt
+            s.sendall(ws.mask_frame(json.dumps({"t": "k", "k": "rm -rf"}).encode()))
+            op, err = ws.read_frame(rf)
+            self.assertIn("nicht erlaubt", json.loads(err)["error"])
+            s.sendall(ws.mask_frame(b"", 0x8))
+            s.close()
+
+            # Live-Vorschau liefert JPEG-Bilder
+            with urllib.request.urlopen(f"http://127.0.0.1:{self.port}/r/{key}/preview.mjpg?fps=5&w=320", timeout=10) as r:
+                self.assertIn("multipart/x-mixed-replace", r.headers["Content-Type"])
+                data = r.read(8000)
+            self.assertIn(b"--lkframe", data)
+            self.assertIn(b"\xff\xd8", data)
+            st = json.load(urllib.request.urlopen(f"http://127.0.0.1:{self.port}/r/{key}/status", timeout=5))
+            self.assertTrue(st["input"])
+        finally:
+            self.app.set_option(input_enabled=False)
+            self.app._xinput = None
             xvfb.terminate()
             if old is None:
                 os.environ.pop("DISPLAY", None)

@@ -6,6 +6,7 @@ Bild **und Ton** vom PC auf den Chromecast übertragen, auch auf ältere Modelle
 - **Videos direkt an den Fernseher senden.** Mit der Browser-Erweiterung [LakuenWatcher](https://github.com/elkarbeenus/lakuenwatcher) läuft das Video in voller Qualität auf dem Chromecast. Nach jeder Folge kommt automatisch die nächste.
 - Findet Chromecasts im Heimnetz automatisch. Notfalls trägst du die IP-Adresse von Hand ein.
 - **Handy als Fernbedienung**: Den QR-Code in LakuenCast mit dem iPhone scannen. Dann gehen Pause, Spulen, Lautstärke, Spiegeln und „Nächste Folge“ von der Couch aus.
+- **Maus & Tastatur vom Handy**: Touchpad mit Gesten, Tastatur (auch Umlaute und Sonderzeichen), Sondertasten und eine Live-Vorschau des PC-Bildschirms, auf die man direkt tippen kann
 - **PC-Ton beim Spiegeln stumm**: Der Ton kommt nur aus dem Fernseher.
 - **Eigene Videodateien senden**: Datei wählen oder ins Fenster ziehen. Passende MP4-Dateien laufen direkt, alles andere wird beim Abspielen umgewandelt.
 - **Geringe Verzögerung** beim Spiegeln (experimentell): etwa 1–2 s statt 3–6 s
@@ -39,6 +40,21 @@ Der Schlüssel in der Adresse schützt die Fernbedienung, damit niemand sonst im
 
 „Nächste Folge“ funktioniert, wenn das Video mit LakuenWatcher an den Fernseher gesendet wurde.
 
+### Maus & Tastatur
+
+Den zweiten Reiter „Maus & Tastatur“ schaltest du in LakuenCast mit **„Maus, Tastatur & Vorschau vom Handy erlauben“** frei. Standardmäßig ist er aus.
+
+| Geste | Wirkung |
+|---|---|
+| 1 Finger wischen | Maus bewegen (mit Beschleunigung, Tempo einstellbar) |
+| Tippen | Linksklick |
+| 2 Finger tippen | Rechtsklick |
+| 2 Finger wischen | Scrollen |
+| 2× tippen und halten | Ziehen (z. B. Fenster verschieben) |
+| „Aufs Bild tippen“ | in der Live-Vorschau genau dort klicken, lange drücken = Rechtsklick |
+
+Die Vorschau kommt mit etwa 0,2 s Verzögerung, also viel schneller als das Bild am Fernseher. Die Steuerung läuft über eine WebSocket-Verbindung. Die Eingaben macht LakuenCast über X11/XTest, das ist im SteamOS-Desktop-Modus schon dabei.
+
 ## Bekannte Grenzen
 
 - **Wayland:** Das Bild bleibt schwarz. Der SteamOS-Desktop-Modus nutzt X11, dort klappt es.
@@ -63,6 +79,8 @@ lakuencast/proxy.py     Video-Durchreiche, Playlists umschreiben
 lakuencast/filecast.py  eigene Videodateien (direkt oder umwandeln)
 lakuencast/pcaudio.py   PC-Ton beim Spiegeln umleiten
 lakuencast/qr.py        QR-Code für die Handy-Fernbedienung
+lakuencast/xinput.py    Maus & Tastatur (X11/XTest per ctypes)
+lakuencast/ws.py        WebSocket für flüssige Handy-Eingaben
 lakuencast/web/remote.html  Handy-Fernbedienung
 lakuencast/server.py    HTTP-Server (Oberfläche, API, Stream)
 lakuencast/updater.py   Update aus dem Programm

@@ -5,7 +5,7 @@ VERSION wird für Releases hier gepflegt. Testbuilds: "0.2.0-test.1".
 
 import re
 
-VERSION = "0.2.1"
+VERSION = "0.3.0"
 REPO = "elkarbeenus/LakuenCast"
 
 _RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:[-.]?test[.-]?(\d+))?", re.I)
