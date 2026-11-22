@@ -121,9 +121,12 @@ class Updater:
             self.state = "restarting"
             log.info("Update installiert, starte neu …")
             on_restart()
-            subprocess.Popen([target, "--after-update"], start_new_session=True,
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            time.sleep(0.5)
+            # Neue Version mit sauberer Umgebung starten (ohne Reste des alten AppImages)
+            env = {k: v for k, v in os.environ.items()
+                   if k not in ("APPDIR", "APPIMAGE", "ARGV0", "OWD", "PYTHONHOME", "PYTHONPATH")}
+            subprocess.Popen([target, "--after-update"], start_new_session=True, env=env, cwd=os.path.expanduser("~"),
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            time.sleep(0.8)
             os._exit(0)
         except Exception as e:  # noqa: BLE001
             self.state, self.error = "error", str(e)

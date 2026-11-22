@@ -107,6 +107,44 @@ class TestQr(unittest.TestCase):
             self.assertEqual(cv2.QRCodeDetector().detectAndDecode(img)[0], text)
 
 
+class TestRestartAfterUpdate(unittest.TestCase):
+    def test_new_version_takes_over(self):
+        """Neue Version startet, während die alte noch kurz läuft → sie muss übernehmen."""
+        port = free_port()
+        env = {**os.environ, "LAKUENCAST_NO_UPDATE_CHECK": "1", "LAKUENCAST_NO_GUI": "1"}
+        root = str(Path(__file__).resolve().parent.parent)
+        old = subprocess.Popen([sys.executable, "-m", "lakuencast", "--no-window", "--port", str(port)], cwd=root, env=env,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        new = None
+        try:
+            for _ in range(40):
+                try:
+                    urllib.request.urlopen(f"http://127.0.0.1:{port}/api/status", timeout=1)
+                    break
+                except OSError:
+                    time.sleep(0.25)
+            new = subprocess.Popen([sys.executable, "-m", "lakuencast", "--after-update", "--no-window", "--port", str(port)],
+                                   cwd=root, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            time.sleep(1.0)
+            old.terminate()
+            old.wait(timeout=5)
+            ok = False
+            for _ in range(40):
+                try:
+                    urllib.request.urlopen(f"http://127.0.0.1:{port}/api/status", timeout=1)
+                    ok = True
+                    break
+                except OSError:
+                    time.sleep(0.25)
+            self.assertTrue(ok, "neue Version hat nicht übernommen")
+            self.assertIsNone(new.poll(), "neue Version hat sich beendet")
+        finally:
+            for p in (old, new):
+                if p and p.poll() is None:
+                    p.terminate()
+                    p.wait(timeout=5)
+
+
 class TestWebSocket(unittest.TestCase):
     def test_accept_key_rfc_example(self):
         from lakuencast import ws

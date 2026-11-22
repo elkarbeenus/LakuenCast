@@ -71,8 +71,16 @@ def main(argv: list[str] | None = None) -> int:
     url = f"http://127.0.0.1:{args.port}/"
     show_window = not (args.background or args.no_window or args.after_update)
 
+    # Nach einem Update: Die alte Version beendet sich gerade noch. Warten, bis sie
+    # weg ist, statt zu denken "läuft schon" und selbst wieder zu gehen.
+    if args.after_update:
+        for _ in range(60):
+            if not already_running(args.port):
+                break
+            time.sleep(0.25)
+
     # Läuft schon? Dann nur das Fenster zeigen.
-    if not args.screenshot and already_running(args.port):
+    if not args.screenshot and not args.after_update and already_running(args.port):
         if show_window and not ask_running_instance_to_show(args.port):
             desktop.open_window(url)
         return 0
