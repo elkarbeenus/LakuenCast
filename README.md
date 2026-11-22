@@ -1,93 +1,191 @@
 # LakuenCast
 
-Bild **und Ton** vom PC auf den Chromecast übertragen, auch auf ältere Modelle. Gebaut für SteamOS im Desktop-Modus, läuft auf jedem Linux-Desktop mit X11.
+**English** · [Deutsch](#deutsch)
 
-- **Bildschirm spiegeln mit Ton.** Brave überträgt beim Bildschirm-Streamen unter Linux keinen Ton, LakuenCast schon.
-- **Videos direkt an den Fernseher senden.** Mit der Browser-Erweiterung [LakuenWatcher](https://github.com/elkarbeenus/lakuenwatcher) läuft das Video in voller Qualität auf dem Chromecast. Nach jeder Folge kommt automatisch die nächste.
-- Findet Chromecasts im Heimnetz automatisch. Notfalls trägst du die IP-Adresse von Hand ein.
-- **Handy als Fernbedienung**: Den QR-Code in LakuenCast mit dem iPhone scannen. Dann gehen Pause, Spulen, Lautstärke, Spiegeln und „Nächste Folge“ von der Couch aus.
-- **Maus & Tastatur vom Handy**: Touchpad mit Gesten, Tastatur (auch Umlaute und Sonderzeichen), Sondertasten und eine Live-Vorschau des PC-Bildschirms, auf die man direkt tippen kann
-- **PC-Ton beim Spiegeln stumm**: Der Ton kommt nur aus dem Fernseher.
-- **Eigene Videodateien senden**: Datei wählen oder ins Fenster ziehen. Passende MP4-Dateien laufen direkt, alles andere wird beim Abspielen umgewandelt.
-- **Geringe Verzögerung** beim Spiegeln (experimentell): etwa 1–2 s statt 3–6 s
-- Lautstärke, Pause und Spulen direkt in LakuenCast
-- Auf Wunsch Autostart beim Hochfahren, im Hintergrund
-- **Update mit einem Klick** im Programm
+Cast your PC screen **with audio** — and videos from the browser — to a Chromecast, including older models. Built for SteamOS desktop mode; works on any Linux desktop running X11. Comes with a phone remote that doubles as a touchpad and keyboard.
+
+## Features
+
+- **Mirror the screen with audio**: browsers on Linux mirror without sound; LakuenCast includes it
+- **Send videos from the browser** with [LakuenWatcher](https://github.com/elkarbeenus/lakuenwatcher): plays in full quality on the TV, continues at the current position and advances to the next episode automatically
+- **Send local video files** by choosing or dragging them into the window; compatible MP4 files play directly, other formats are converted on the fly
+- **Phone remote** in the browser: play/pause, seek (draggable timeline), volume, next episode, mirroring, sleep and shutdown of the PC
+- **Mouse and keyboard from the phone**: touchpad with gestures, on-screen keyboard (including umlauts and special characters), special keys and an optional live preview
+- **Mute the PC while mirroring** so audio only plays on the TV
+- **Low-latency mode** (experimental): about 1–2 seconds instead of 3–6
+- Automatic Chromecast discovery, manual IP entry as fallback, remembers the last device
+- Native window with tray icon, optional autostart in the background
+- **One-click updates** from within the application
 
 ## Installation
 
-1. Unter [Releases](https://github.com/elkarbeenus/LakuenCast/releases/latest) die Datei `LakuenCast-x86_64.AppImage` herunterladen.
-2. In Dolphin: Rechtsklick → **Eigenschaften** → **Berechtigungen** → **Ausführbar** anhaken.
-3. Doppelklick. LakuenCast öffnet sich als eigenes Fenster mit Symbol in der Taskleiste und erscheint danach auch im Startmenü. Schließt du das Fenster, läuft LakuenCast in der Taskleiste weiter; „Beenden“ gibt es per Rechtsklick auf das Symbol.
+1. Download `LakuenCast-x86_64.AppImage` from [Releases](https://github.com/elkarbeenus/LakuenCast/releases/latest).
+2. Make it executable (file manager: *Properties → Permissions → Executable*, or `chmod +x LakuenCast-x86_64.AppImage`).
+3. Start it. LakuenCast opens its window and adds itself to the application menu.
 
-Tipp: Lege das AppImage an einen festen Ort, z. B. `~/Programme/`. Startmenü und Autostart zeigen auf diesen Pfad.
+Keep the AppImage in a permanent location (for example `~/Applications/`); menu entry and autostart point to that path. FFmpeg and Qt are bundled; nothing else needs to be installed.
 
-## So funktioniert es
+## Phone remote
+
+The LakuenCast window shows a **QR code** and a **6-digit code** under *Phone remote*.
+
+- **Scan the QR code** with the phone camera, or
+- **Open `http://<PC-IP>:47800/remote`** on the phone and enter the 6-digit code.
+
+The phone must be on the same network. To use the remote like an app, add the page to the home screen (Safari or Chrome: *Share → Add to Home Screen*).
+
+### Mouse and keyboard
+
+Enable **Allow mouse, keyboard & preview from the phone** in the LakuenCast window (off by default). The remote then offers a second tab:
+
+| Gesture | Action |
+|---|---|
+| Swipe with one finger | Move the pointer (with acceleration; speed adjustable) |
+| Tap | Left click |
+| Two-finger tap | Right click |
+| Two-finger swipe | Scroll |
+| Double tap and hold | Drag |
+
+Text typed on the phone is entered on the PC. Special keys (Enter, Backspace, Esc, Tab, arrows, F11, media keys) are available as buttons. The live preview has a latency of roughly 0.2 seconds.
+
+### Security
+
+- The QR code and the 6-digit code are **single-use**; after pairing, new codes are generated immediately.
+- Each phone connection is valid for **5 hours** and then ends automatically. It survives restarts of the phone and of LakuenCast; only checksums of the session tokens are stored.
+- Five wrong code entries trigger a new code and a 30-second pause.
+- **Disconnect all phones** in the window ends every connection immediately.
+- Control endpoints accept requests only from the PC itself or from a paired phone; the Chromecast can only fetch the stream that is currently playing.
+
+## How it works
 
 | | |
 |---|---|
-| **Bildschirm spiegeln** | ffmpeg nimmt den Bildschirm (X11) und den Ton der Standard-Audioausgabe (PipeWire/PulseAudio) auf. Daraus entsteht ein HLS-Livestream mit H.264 und AAC, den der Chromecast abruft. Das Bild kommt etwa 3 bis 6 Sekunden später an. |
-| **Video senden** | LakuenWatcher gibt die Videoadresse samt Referer und Cookies an LakuenCast weiter. LakuenCast holt das Video beim Hoster ab und reicht es an den Chromecast durch, auch HLS mit allen Stücken. |
-| **Auto-Next** | Ist die Folge auf dem Fernseher zu Ende, meldet LakuenCast das an LakuenWatcher. Die Erweiterung holt dann die nächste Folge und schickt sie hinterher. |
+| Mirroring | FFmpeg captures the X11 screen and the default audio output (PipeWire/PulseAudio) and serves an HLS stream (H.264/AAC) that any Chromecast can play. |
+| Browser videos | LakuenWatcher passes the video URL, referrer and cookies to LakuenCast, which fetches the stream and relays it to the Chromecast, rewriting HLS playlists as needed. |
+| Next episode | When an episode finishes on the TV, LakuenCast notifies LakuenWatcher, which loads the next one and sends it. |
+| Mouse/keyboard | Input is sent over a WebSocket and injected through X11/XTest. |
 
-LakuenCast nutzt Port **47800**. Steuern lässt es sich nur vom eigenen PC aus. Der Chromecast darf nur den Livestream und die Videos abrufen, die gerade laufen.
+LakuenCast listens on port **47800**.
+
+## Known limitations
+
+- **Wayland**: screen capture and mouse control require an X11 session (SteamOS desktop mode uses X11).
+- **Low-latency mode** may stutter on some Chromecast models; switch it off if it does.
+- **Converted files** (for example MKV with HEVC) can only be seeked within the part already converted.
+- Some video hosts cannot be relayed; screen mirroring works in that case.
+- A camera scanner inside the remote page is not possible because iOS only allows camera access on HTTPS pages.
+
+## Development
+
+Python 3 with a Qt (PySide6) interface. Without PySide6 the interface opens in the browser.
+
+```bash
+python3 -m lakuencast                       # run from source
+python3 -m unittest discover -s tests -v    # tests
+```
+
+```
+lakuencast/castv2.py     Cast protocol v2 (TLS + Protobuf, no dependencies)
+lakuencast/mdns.py       Chromecast discovery (mDNS, avahi fallback)
+lakuencast/mirror.py     Screen and audio capture (FFmpeg)
+lakuencast/pcaudio.py    Redirect PC audio while mirroring
+lakuencast/proxy.py      Video relay and playlist rewriting
+lakuencast/filecast.py   Local video files (direct or converted)
+lakuencast/xinput.py     Mouse and keyboard (X11/XTest via ctypes)
+lakuencast/ws.py         WebSocket for low-latency phone input
+lakuencast/qr.py         QR code generator
+lakuencast/server.py     HTTP server (UI, API, streams, pairing)
+lakuencast/updater.py    In-app updates
+lakuencast/gui.py        Native window and tray icon (Qt)
+lakuencast/web/          Phone remote and browser UI
+packaging/               AppImage build
+```
+
+**Releases:** increase `VERSION` in `lakuencast/version.py` and push to `main`. GitHub Actions runs the tests, builds and smoke-tests the AppImage and publishes the release. A version such as `0.4.0-test.1` produces a test build.
+
+---
+
+<a id="deutsch"></a>
+
+# LakuenCast (Deutsch)
+
+[English](#lakuencast) · **Deutsch**
+
+LakuenCast überträgt den PC-Bildschirm **mit Ton** und Videos aus dem Browser auf einen Chromecast, auch auf ältere Modelle. Entwickelt für den Desktop-Modus von SteamOS, lauffähig auf jedem Linux-Desktop mit X11. Dazu gehört eine Handy-Fernbedienung, die auch als Touchpad und Tastatur dient.
+
+## Funktionen
+
+- **Bildschirm mit Ton spiegeln**: Browser spiegeln unter Linux ohne Ton, LakuenCast überträgt ihn mit.
+- **Videos aus dem Browser senden** mit [LakuenWatcher](https://github.com/elkarbeenus/lakuenwatcher): Wiedergabe in voller Qualität auf dem Fernseher. Sie setzt an der aktuellen Stelle fort und wechselt automatisch zur nächsten Folge.
+- **Eigene Videodateien senden** per Auswahl oder durch Hineinziehen ins Fenster. Passende MP4-Dateien laufen direkt, andere Formate werden beim Abspielen umgewandelt.
+- **Handy-Fernbedienung** im Browser: Wiedergabe/Pause, Spulen (ziehbare Zeitleiste), Lautstärke, nächste Folge, Spiegeln, Energiesparmodus und Herunterfahren des PCs.
+- **Maus und Tastatur vom Handy**: Touchpad mit Gesten, Bildschirmtastatur (auch Umlaute und Sonderzeichen), Sondertasten und eine zuschaltbare Live-Vorschau.
+- **PC beim Spiegeln stumm**, der Ton kommt nur aus dem Fernseher.
+- **Modus mit geringer Verzögerung** (experimentell): etwa 1–2 Sekunden statt 3–6.
+- Findet Chromecasts automatisch, als Ausweg auch per IP-Eingabe. Merkt sich das zuletzt genutzte Gerät.
+- Eigenes Fenster mit Taskleisten-Symbol, auf Wunsch Autostart im Hintergrund.
+- **Update mit einem Klick** direkt im Programm.
+
+## Installation
+
+1. `LakuenCast-x86_64.AppImage` unter [Releases](https://github.com/elkarbeenus/LakuenCast/releases/latest) herunterladen.
+2. Ausführbar machen (Dateimanager: *Eigenschaften → Berechtigungen → Ausführbar* oder `chmod +x LakuenCast-x86_64.AppImage`).
+3. Starten. LakuenCast öffnet sein Fenster und trägt sich ins Anwendungsmenü ein.
+
+Das AppImage an einem festen Ort ablegen, z. B. in `~/Anwendungen/`. Menüeintrag und Autostart zeigen auf diesen Pfad. FFmpeg und Qt sind enthalten, sonst muss nichts installiert werden.
 
 ## Handy-Fernbedienung
 
-LakuenCast zeigt einen QR-Code und eine Adresse wie `http://192.168.178.20:47800/remote?k=…`. Scanne ihn mit der iPhone-Kamera, das Handy muss im selben WLAN sein. Im Browser gehst du dann auf Teilen → **Zum Home-Bildschirm**, so liegt die Fernbedienung wie eine App auf dem Handy.
+Im LakuenCast-Fenster stehen unter *Handy als Fernbedienung* ein **QR-Code** und ein **6-stelliger Code**:
 
-**Als App auf dem iPhone:** Öffne `http://<PC-IP>:47800/remote` in Safari → Teilen → **Zum Home-Bildschirm**. Ist keine Verbindung da, zeigt die App ein Ziffernfeld: Tippe den 6-stelligen Code aus dem LakuenCast-Fenster ein, fertig. Ein eigener Kamera-Scanner in der Seite ist nicht möglich, weil iPhones die Kamera nur auf `https://`-Seiten freigeben.
+- den **QR-Code** mit der Handy-Kamera scannen, oder
+- auf dem Handy **`http://<PC-IP>:47800/remote`** öffnen und den 6-stelligen Code eingeben.
 
-**Sicherheit:** QR-Code und 6-stelliger Code gelten nur einmal. Beim Scannen bekommt das Handy eine eigene Verbindung, und LakuenCast zeigt sofort einen neuen Code. Jede Verbindung gilt **5 Stunden** und wird danach automatisch getrennt. Mit „Alle Handys trennen“ geht das sofort. Ein Lesezeichen auf dem Home-Bildschirm hält deshalb auch nur 5 Stunden, danach scannst du einfach neu.
+Das Handy muss im selben Netzwerk sein. Damit die Fernbedienung wie eine App funktioniert, die Seite zum Home-Bildschirm hinzufügen (Safari und Chrome: *Teilen → Zum Home-Bildschirm*).
 
-„Nächste Folge“ funktioniert, wenn das Video mit LakuenWatcher an den Fernseher gesendet wurde.
+### Maus und Tastatur
 
-### Maus & Tastatur
-
-Den zweiten Reiter „Maus & Tastatur“ schaltest du in LakuenCast mit **„Maus, Tastatur & Vorschau vom Handy erlauben“** frei. Standardmäßig ist er aus.
+Im LakuenCast-Fenster **Maus, Tastatur & Vorschau vom Handy erlauben** einschalten (standardmäßig aus). Die Fernbedienung zeigt dann einen zweiten Reiter:
 
 | Geste | Wirkung |
 |---|---|
-| 1 Finger wischen | Maus bewegen (mit Beschleunigung, Tempo einstellbar) |
+| Mit einem Finger wischen | Mauszeiger bewegen (mit Beschleunigung, Tempo einstellbar) |
 | Tippen | Linksklick |
-| 2 Finger tippen | Rechtsklick |
-| 2 Finger wischen | Scrollen |
-| 2× tippen und halten | Ziehen (z. B. Fenster verschieben) |
+| Mit zwei Fingern tippen | Rechtsklick |
+| Mit zwei Fingern wischen | Scrollen |
+| Doppelt tippen und halten | Ziehen |
 
-Die Live-Vorschau am Handy lässt sich zuschalten. Sie kommt mit etwa 0,2 s Verzögerung, also viel schneller als das Bild am Fernseher. Die Steuerung läuft über eine WebSocket-Verbindung. Die Eingaben macht LakuenCast über X11/XTest, das ist im SteamOS-Desktop-Modus schon dabei.
+Was auf dem Handy getippt wird, landet am PC. Sondertasten wie Enter, Löschen, Esc, Tab, Pfeiltasten, F11 und Medientasten gibt es als Schaltflächen. Die Live-Vorschau hat eine Verzögerung von etwa 0,2 Sekunden.
 
-## Bekannte Grenzen
+### Sicherheit
 
-- **Wayland:** Das Bild bleibt schwarz. Der SteamOS-Desktop-Modus nutzt X11, dort klappt es.
-- **Geringe Verzögerung:** Das ist ein Versuch. Ruckelt es auf deinem Chromecast, schalte es wieder aus.
-- **Umgewandelte Dateien:** Bei Dateien, die umgewandelt werden müssen (z. B. MKV mit HEVC), geht Spulen nur im schon umgewandelten Teil.
-- **Hoster:** Einzelne Hoster lassen sich nicht durchreichen. Dann hilft „Bildschirm spiegeln“.
+- QR-Code und 6-stelliger Code gelten **nur einmal**. Nach dem Verbinden werden sofort neue Codes erzeugt.
+- Jede Handy-Verbindung gilt **5 Stunden** und endet dann automatisch. Sie übersteht Neustarts von Handy und LakuenCast. Gespeichert werden nur Prüfsummen der Verbindungsschlüssel.
+- Nach fünf falschen Code-Eingaben wird ein neuer Code erzeugt, und es gibt 30 Sekunden Pause.
+- **Alle Handys trennen** im Fenster beendet sofort alle Verbindungen.
+- Steuerbefehle werden nur vom PC selbst oder von einem verbundenen Handy angenommen. Der Chromecast kann nur den Stream abrufen, der gerade läuft.
+
+## Funktionsweise
+
+| | |
+|---|---|
+| Spiegeln | FFmpeg nimmt den X11-Bildschirm und die Standard-Audioausgabe (PipeWire/PulseAudio) auf und stellt daraus einen HLS-Stream (H.264/AAC) bereit, den jeder Chromecast abspielen kann. |
+| Browser-Videos | LakuenWatcher übergibt Video-Adresse, Referer und Cookies an LakuenCast. LakuenCast holt den Stream ab und reicht ihn an den Chromecast weiter, HLS-Playlists werden dabei bei Bedarf umgeschrieben. |
+| Nächste Folge | Endet eine Folge auf dem Fernseher, meldet LakuenCast das an LakuenWatcher. LakuenWatcher lädt dann die nächste Folge und sendet sie. |
+| Maus/Tastatur | Eingaben laufen über einen WebSocket und werden per X11/XTest ausgelöst. |
+
+LakuenCast nutzt den Port **47800**.
+
+## Bekannte Einschränkungen
+
+- **Wayland**: Bildschirmaufnahme und Maussteuerung brauchen eine X11-Sitzung (der SteamOS-Desktop-Modus nutzt X11).
+- **Geringe Verzögerung** kann auf manchen Chromecast-Modellen ruckeln. In dem Fall ausschalten.
+- **Umgewandelte Dateien** (z. B. MKV mit HEVC) lassen sich nur im schon umgewandelten Teil spulen.
+- Manche Video-Hoster lassen sich nicht durchreichen. Dann funktioniert das Spiegeln.
+- Ein Kamera-Scanner direkt auf der Fernbedienungsseite ist nicht möglich, weil iOS den Kamerazugriff nur auf HTTPS-Seiten erlaubt.
 
 ## Entwicklung
 
-Python 3, Oberfläche mit Qt (PySide6). Ohne PySide6 öffnet sich die Oberfläche im Browser. ffmpeg und Qt stecken im AppImage.
+Aufbau des Projekts und Tests: siehe Abschnitt [Development](#development).
 
-```bash
-python3 -m lakuencast            # starten
-python3 -m unittest discover -s tests -v
-```
-
-```
-lakuencast/castv2.py    Chromecast-Protokoll (TLS + Protobuf, von Hand)
-lakuencast/mdns.py      Chromecasts im Netzwerk finden
-lakuencast/mirror.py    Bildschirm + Ton → HLS (ffmpeg)
-lakuencast/proxy.py     Video-Durchreiche, Playlists umschreiben
-lakuencast/filecast.py  eigene Videodateien (direkt oder umwandeln)
-lakuencast/pcaudio.py   PC-Ton beim Spiegeln umleiten
-lakuencast/qr.py        QR-Code für die Handy-Fernbedienung
-lakuencast/xinput.py    Maus & Tastatur (X11/XTest per ctypes)
-lakuencast/ws.py        WebSocket für flüssige Handy-Eingaben
-lakuencast/web/remote.html  Handy-Fernbedienung
-lakuencast/server.py    HTTP-Server (Oberfläche, API, Stream)
-lakuencast/updater.py   Update aus dem Programm
-lakuencast/gui.py       eigenes Fenster + Taskleisten-Symbol (Qt)
-lakuencast/web/         Browser-Oberfläche (Ersatz ohne Qt)
-packaging/              AppImage-Bau
-```
-
-**Release:** `VERSION` in `lakuencast/version.py` erhöhen und auf `main` pushen. GitHub Actions übernimmt dann Tests, AppImage-Bau, Probelauf und Release. Eine Version wie `0.2.0-test.1` ergibt einen Testbuild.
+**Releases:** `VERSION` in `lakuencast/version.py` erhöhen und auf `main` pushen. GitHub Actions führt die Tests aus, baut und prüft das AppImage und veröffentlicht das Release. Eine Version wie `0.4.0-test.1` ergibt einen Testbuild.
