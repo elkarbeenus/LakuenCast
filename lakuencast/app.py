@@ -20,6 +20,11 @@ from .updater import Updater
 log = logging.getLogger("lakuencast")
 
 
+def _h(token: str) -> str:
+    import hashlib
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
 def lan_ip_for(host: str) -> str:
     """Die eigene IP, unter der der Chromecast uns erreicht."""
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -50,7 +55,8 @@ class App:
         self.power_requested: str | None = None
         self._xinput = None
         self.preview_proc = None
-        self.sessions: dict[str, float] = {}   # Handy-Verbindungen: Token → läuft ab um
+        now = time.time()
+        self.sessions: dict[str, float] = {h: float(e) for h, e in (self.config["sessions"] or {}).items() if float(e) > now}
         self._lan_ip, self._lan_ip_at = "", 0.0
         self.proxy = proxymod.Proxy()
         self.finished_seq = 0         # zählt hoch, wenn eine gecastete Folge zu Ende ist
@@ -255,7 +261,8 @@ class App:
                 return None
             self.config.new_remote_key()          # alter QR-Code ist ab jetzt wertlos
             token = secrets.token_urlsafe(18)
-            self.sessions[token] = time.time() + self.SESSION_TTL
+            self.sessions[_h(token)] = time.time() + self.SESSION_TTL
+            self._save_sessions()
             return token
 
     def session_ok(self, token: str) -> bool:
@@ -263,17 +270,30 @@ class App:
             return False
         now = time.time()
         with self.lock:
-            for t in [t for t, exp in self.sessions.items() if exp <= now]:
+            gone = [t for t, exp in self.sessions.items() if exp <= now]
+            for t in gone:
                 del self.sessions[t]
-            return token in self.sessions
+            if gone:
+                self._save_sessions()
+            return _h(token) in self.sessions
 
     def session_expires(self, token: str) -> float:
-        return self.sessions.get(token, 0)
+        return self.sessions.get(_h(token), 0) if token else 0
+
+    def expire_session(self, token: str) -> None:
+        """Nur für Tests: Verbindung sofort ablaufen lassen."""
+        self.sessions[_h(token)] = time.time() - 1
 
     def disconnect_phones(self) -> None:
         with self.lock:
             self.sessions.clear()
+            self._save_sessions()
             self.config.new_remote_key()
+
+    def _save_sessions(self) -> None:
+        # Gespeichert, damit Handys verbunden bleiben, wenn LakuenCast neu startet
+        # (Update, Energiesparmodus). Nur Prüfsummen, nie die Tokens selbst.
+        self.config.set(sessions=dict(self.sessions))
 
     def phone_info(self) -> dict:
         now = time.time()

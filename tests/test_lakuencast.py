@@ -396,13 +396,19 @@ class TestIntegration(unittest.TestCase):
         self.assertFalse(json.load(urllib.request.urlopen(req, timeout=5))["ok"])
 
         # Nach Ablauf (hier: sofort) ist Schluss
-        self.app.sessions[key] = time.time() - 1
+        self.app.expire_session(key)
         with self.assertRaises(urllib.error.HTTPError) as e:
             urllib.request.urlopen(f"http://127.0.0.1:{self.port}/r/{key}/status", timeout=5)
         self.assertEqual(e.exception.code, 403)
         with self.assertRaises(urllib.error.HTTPError) as e:
             urllib.request.urlopen(f"http://127.0.0.1:{self.port}/remote?s={key}", timeout=5)
         self.assertEqual(e.exception.code, 403)
+        # Verbindung übersteht einen Neustart von LakuenCast
+        from lakuencast.app import App
+        k3 = pair(self.port, self.app)
+        again = App(0, config=self.app.config.__class__(self.app.config.path))
+        self.assertTrue(again.session_ok(k3))
+        self.assertNotIn(k3, json.dumps(self.app.config.data))  # nur Prüfsummen gespeichert
         # "Alle Handys trennen"
         k2 = pair(self.port, self.app)
         self.app.disconnect_phones()
@@ -537,7 +543,7 @@ class TestIntegration(unittest.TestCase):
             while rf.readline() not in (b"\r\n", b""):
                 pass
             ws.read_frame(rf)
-            self.app.sessions[key] = time.time() - 1
+            self.app.expire_session(key)
             s.sendall(ws.mask_frame(b'{"t":"ping"}'))
             op, msg = ws.read_frame(rf)
             self.assertEqual(json.loads(msg)["error"], "expired")

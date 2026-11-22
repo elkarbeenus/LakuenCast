@@ -104,7 +104,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.end_headers()
                 return
             if not self._remote_ok(token):
-                return self._expired_page("Die Verbindung ist abgelaufen.")
+                return self._expired_page("Die Verbindung ist abgelaufen." if token else "Bitte QR-Code scannen.")
             return self._static("remote.html", head)
         if path.startswith("/r/") and path.endswith("/ws"):
             return self._ws_input(path)
@@ -213,7 +213,16 @@ font:16px -apple-system,system-ui,sans-serif;text-align:center;padding:24px;box-
 font-size:36px;background:linear-gradient(135deg,#8b5cf6,#6366f1);box-shadow:0 14px 40px rgba(124,92,246,.5)}}
 h1{{font-size:22px;margin:0 0 8px}}p{{color:rgba(244,242,255,.6);margin:0;line-height:1.5}}</style></head>
 <body><div class="c"><div class="i">🔒</div><h1>{reason}</h1>
-<p>Öffne LakuenCast am PC und scanne den aktuellen QR-Code mit der Kamera.</p></div></body></html>""".encode()
+<p>Öffne LakuenCast am PC und scanne den aktuellen QR-Code mit der Kamera.</p></div>
+<script>
+// Hat dieses Handy noch eine gültige Verbindung (z. B. nach Neustart), direkt dorthin.
+try {{
+  const cur = new URLSearchParams(location.search).get("s");
+  const st = JSON.parse(localStorage.getItem("lc-session") || "null");
+  if (st && st.exp * 1000 > Date.now() && st.s !== cur) location.replace("/remote?s=" + encodeURIComponent(st.s));
+  else if (st && st.s === cur) localStorage.removeItem("lc-session");
+}} catch (e) {{}}
+</script></body></html>""".encode()
         self.send_response(403)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(html)))

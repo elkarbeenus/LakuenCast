@@ -447,6 +447,7 @@
     function showExpired() {
       if (expired) return;
       expired = true;
+      try { localStorage.removeItem("lc-session"); } catch (_) {}
       try { clearInterval(poller); } catch (_) {}
       try { disconnect(); } catch (_) {}
       const img = document.getElementById("pimg"); if (img) img.removeAttribute("src");
@@ -491,6 +492,8 @@
       showErr(s.error || "");
       $("dev").textContent = s.device || "Kein Fernseher";
       if (s.expiresAt) {
+        // merken, damit die Verbindung einen Neustart des Handys übersteht
+        try { localStorage.setItem("lc-session", JSON.stringify({ s: key, exp: s.expiresAt })); } catch (_) {}
         const until = new Date(s.expiresAt * 1000).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
         $("brand-sub").textContent = `Verbunden bis ${until}`;
         if (s.expiresAt * 1000 < Date.now()) showExpired();

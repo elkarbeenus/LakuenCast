@@ -14,6 +14,7 @@ DEFAULTS = {
     "mute_pc": True,         # PC-Ton beim Spiegeln stumm (Ton nur am Fernseher)
     "low_latency": False,    # Spiegeln mit geringer Verzögerung (experimentell)
     "input_enabled": False,  # Maus, Tastatur & Vorschau vom Handy erlauben
+    "sessions": {},          # Handy-Verbindungen: SHA-256 des Tokens → läuft ab um (Unix-Zeit)
     "quality": "720p",
     "last_device": "",
 }
