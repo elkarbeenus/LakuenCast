@@ -36,7 +36,9 @@ LakuenCast nutzt Port **47800**. Steuern lässt es sich nur vom eigenen PC aus. 
 
 LakuenCast zeigt einen QR-Code und eine Adresse wie `http://192.168.178.20:47800/remote?k=…`. Scanne ihn mit der iPhone-Kamera, das Handy muss im selben WLAN sein. Im Browser gehst du dann auf Teilen → **Zum Home-Bildschirm**, so liegt die Fernbedienung wie eine App auf dem Handy.
 
-**Sicherheit:** Der QR-Code gilt nur einmal. Beim Scannen bekommt das Handy eine eigene Verbindung, und LakuenCast zeigt sofort einen neuen Code. Jede Verbindung gilt **5 Stunden** und wird danach automatisch getrennt. Mit „Alle Handys trennen“ geht das sofort. Ein Lesezeichen auf dem Home-Bildschirm hält deshalb auch nur 5 Stunden, danach scannst du einfach neu.
+**Als App auf dem iPhone:** Öffne `http://<PC-IP>:47800/remote` in Safari → Teilen → **Zum Home-Bildschirm**. Ist keine Verbindung da, zeigt die App ein Ziffernfeld: Tippe den 6-stelligen Code aus dem LakuenCast-Fenster ein, fertig. Ein eigener Kamera-Scanner in der Seite ist nicht möglich, weil iPhones die Kamera nur auf `https://`-Seiten freigeben.
+
+**Sicherheit:** QR-Code und 6-stelliger Code gelten nur einmal. Beim Scannen bekommt das Handy eine eigene Verbindung, und LakuenCast zeigt sofort einen neuen Code. Jede Verbindung gilt **5 Stunden** und wird danach automatisch getrennt. Mit „Alle Handys trennen“ geht das sofort. Ein Lesezeichen auf dem Home-Bildschirm hält deshalb auch nur 5 Stunden, danach scannst du einfach neu.
 
 „Nächste Folge“ funktioniert, wenn das Video mit LakuenWatcher an den Fernseher gesendet wurde.
 

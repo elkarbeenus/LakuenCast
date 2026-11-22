@@ -159,6 +159,16 @@ class TestRestartAfterUpdate(unittest.TestCase):
                     p.wait(timeout=5)
 
 
+class TestConfigMigration(unittest.TestCase):
+    def test_old_config_gets_pin(self):
+        from lakuencast.config import Config
+        path = Path(_tf.mkdtemp()) / "config.json"
+        path.write_text(json.dumps({"remote_key": "alt", "mute_pc": False}))  # Stand vor v0.3.4
+        c = Config(path)
+        self.assertRegex(c["pair_pin"], r"^\d{6}$")
+        self.assertFalse(c["mute_pc"])  # andere Einstellungen bleiben
+
+
 class TestWebSocket(unittest.TestCase):
     def test_accept_key_rfc_example(self):
         from lakuencast import ws
@@ -409,6 +419,35 @@ class TestIntegration(unittest.TestCase):
         again = App(0, config=self.app.config.__class__(self.app.config.path))
         self.assertTrue(again.session_ok(k3))
         self.assertNotIn(k3, json.dumps(self.app.config.data))  # nur Prüfsummen gespeichert
+        # Verbinden mit dem 6-stelligen Code (Home-Bildschirm-App)
+        def pin_post(pin):
+            req = urllib.request.Request(f"http://127.0.0.1:{self.port}/pair", data=json.dumps({"pin": pin}).encode(),
+                                         headers={"Content-Type": "application/json"})
+            return json.load(urllib.request.urlopen(req, timeout=5))
+        pin = self.app.config["pair_pin"]
+        self.assertRegex(pin, r"^\d{6}$")
+        r = pin_post(pin)
+        self.assertTrue(r["ok"], r)
+        self.assertTrue(self.app.session_ok(r["s"]))
+        self.assertNotEqual(self.app.config["pair_pin"], pin)          # gilt nur einmal
+        self.assertFalse(pin_post(pin)["ok"])
+        # Durchprobieren wird gebremst
+        good = self.app.config["pair_pin"]
+        wrong = "000000" if good != "000000" else "111111"
+        self.app._pin_fails = 0
+        for _ in range(4):
+            pin_post(wrong)
+        r = pin_post(wrong)
+        self.assertIn("gewechselt", r["error"])
+        self.assertNotEqual(self.app.config["pair_pin"], good)
+        r = pin_post(self.app.config["pair_pin"])
+        self.assertFalse(r["ok"])
+        self.assertIn("warten", r["error"])
+        self.app._pin_locked_until = 0
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(f"http://127.0.0.1:{self.port}/remote", timeout=5)
+        self.assertIn("6-stelligen Code", e.exception.read().decode())
+
         # "Alle Handys trennen"
         k2 = pair(self.port, self.app)
         self.app.disconnect_phones()

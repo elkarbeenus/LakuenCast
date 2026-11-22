@@ -299,10 +299,15 @@ class MainWindow(QWidget):
         self.qr_label.setAlignment(Qt.AlignCenter)
         rr.addWidget(self.qr_label)
         rtext = QVBoxLayout()
-        rinfo = cls(QLabel("Mit der iPhone-Kamera scannen (gleiches WLAN). Der QR-Code gilt nur einmal und wird "
-                           "danach sofort ausgetauscht. Eine Verbindung hält 5 Stunden."), "small")
+        rinfo = cls(QLabel("QR-Code mit der iPhone-Kamera scannen oder den Code in der Home-Bildschirm-App eintippen "
+                           "(gleiches WLAN). Beide gelten nur einmal, eine Verbindung hält 5 Stunden."), "small")
         rinfo.setWordWrap(True)
         rtext.addWidget(rinfo)
+        self.pin_label = QLabel()
+        self.pin_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.pin_label.setStyleSheet("font-size:24px;font-weight:800;letter-spacing:4px;color:#f2f0fa")
+        self.pin_label.setToolTip("Auf dem Handy in der LakuenCast-App eintippen – gilt nur einmal")
+        rtext.addWidget(self.pin_label)
         self.remote_url = QLabel()
         self.remote_url.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.remote_url.setWordWrap(True)
@@ -593,6 +598,8 @@ class MainWindow(QWidget):
             box.blockSignals(False)
         self.file_btn.setEnabled("file" not in self.busy and mode != "starting")
         self.file_btn.setText("Bereite Datei vor …" if "file" in self.busy else "🎬  Videodatei senden …   (oder hierher ziehen)")
+        pin = str(self.app.config["pair_pin"] or "")
+        self.pin_label.setText(f"Code: {pin[:3]} {pin[3:]}")
         try:
             self._render_qr(self.app.remote_url())  # QR-Code wechselt nach jedem Scan
         except Exception:  # noqa: BLE001

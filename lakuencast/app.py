@@ -58,6 +58,8 @@ class App:
         now = time.time()
         self.sessions: dict[str, float] = {h: float(e) for h, e in (self.config["sessions"] or {}).items() if float(e) > now}
         self._lan_ip, self._lan_ip_at = "", 0.0
+        self._pin_fails = 0
+        self._pin_locked_until = 0.0
         self.proxy = proxymod.Proxy()
         self.finished_seq = 0         # zählt hoch, wenn eine gecastete Folge zu Ende ist
         self._finished_msid = None
@@ -255,15 +257,38 @@ class App:
 
     def pair(self, code: str) -> str | None:
         import hmac
-        import secrets
         with self.lock:
             if not code or not hmac.compare_digest(code, str(self.config["remote_key"])):
                 return None
-            self.config.new_remote_key()          # alter QR-Code ist ab jetzt wertlos
-            token = secrets.token_urlsafe(18)
-            self.sessions[_h(token)] = time.time() + self.SESSION_TTL
-            self._save_sessions()
-            return token
+            return self._new_session()
+
+    def pair_pin(self, pin: str) -> tuple[str | None, str]:
+        """Verbinden mit dem 6-stelligen Code. Gibt (token, Fehlermeldung) zurück."""
+        import hmac
+        pin = "".join(ch for ch in str(pin) if ch.isdigit())
+        with self.lock:
+            now = time.time()
+            if now < self._pin_locked_until:
+                return None, f"Zu viele Versuche – bitte {int(self._pin_locked_until - now) + 1} s warten."
+            if len(pin) == 6 and hmac.compare_digest(pin, str(self.config["pair_pin"])):
+                self._pin_fails = 0
+                return self._new_session(), ""
+            self._pin_fails += 1
+            if self._pin_fails >= 5:
+                # Schutz gegen Durchprobieren: neuer Code und kurze Sperre
+                self._pin_fails = 0
+                self._pin_locked_until = now + 30
+                self.config.new_remote_key()
+                return None, "Zu viele falsche Versuche – der Code wurde gewechselt. Bitte 30 s warten."
+            return None, "Falscher Code – schau aufs LakuenCast-Fenster am PC."
+
+    def _new_session(self) -> str:
+        import secrets
+        self.config.new_remote_key()          # QR-Code und Zahlen-Code sind ab jetzt wertlos
+        token = secrets.token_urlsafe(18)
+        self.sessions[_h(token)] = time.time() + self.SESSION_TTL
+        self._save_sessions()
+        return token
 
     def session_ok(self, token: str) -> bool:
         if not token:

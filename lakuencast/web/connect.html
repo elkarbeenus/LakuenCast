@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0b0a12">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="LakuenCast">
+  <link rel="apple-touch-icon" href="/icon.png">
+  <title>LakuenCast verbinden</title>
+  <style>
+    :root { color-scheme: dark; --bg: #0b0a12; --glass: rgba(255,255,255,.06); --glass2: rgba(255,255,255,.10);
+            --stroke: rgba(255,255,255,.10); --text: #f4f2ff; --muted: rgba(244,242,255,.6);
+            --a1: #8b5cf6; --a2: #6366f1; --a3: #22d3ee; --danger: #fb7185; --ease: cubic-bezier(.2,.8,.2,1); }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; }
+    body { margin: 0; background: var(--bg); color: var(--text); overflow: hidden;
+           font: 16px/1.4 -apple-system, "SF Pro Display", "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased;
+           display: flex; flex-direction: column; align-items: center; justify-content: center;
+           padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom)); }
+    .aurora { position: fixed; inset: -20%; z-index: -1; filter: blur(60px); opacity: .5; pointer-events: none; }
+    .aurora i { position: absolute; border-radius: 50%; animation: float 18s var(--ease) infinite alternate; }
+    .aurora i:nth-child(1) { width: 60vw; height: 60vw; left: 5%; top: 5%; background: var(--a1); }
+    .aurora i:nth-child(2) { width: 55vw; height: 55vw; right: 0; top: 35%; background: var(--a2); animation-delay: -6s; }
+    .aurora i:nth-child(3) { width: 45vw; height: 45vw; left: 20%; bottom: 0; background: #0e7490; animation-delay: -12s; }
+    @keyframes float { to { transform: translate(8vw, -6vh) scale(1.15); } }
+    .wrap { width: 100%; max-width: 380px; text-align: center; animation: in .6s var(--ease) both; }
+    @keyframes in { from { opacity: 0; transform: translateY(14px); } }
+    .logo { width: 84px; height: 84px; border-radius: 26px; margin: 0 auto 22px; display: block;
+            box-shadow: 0 18px 50px rgba(124, 92, 246, .55); }
+    h1 { font-size: 27px; font-weight: 800; letter-spacing: -.02em; margin: 0 0 8px; }
+    .why { color: var(--muted); font-size: 15px; margin: 0 0 30px; }
+    .pin { position: relative; display: grid; grid-template-columns: repeat(6, 1fr); gap: 9px; margin: 0 auto 18px; max-width: 340px; }
+    .pin .box { height: 64px; border-radius: 18px; background: var(--glass); border: 1.5px solid var(--stroke);
+                display: grid; place-items: center; font-size: 30px; font-weight: 750; font-variant-numeric: tabular-nums;
+                backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); transition: border-color .2s, transform .2s var(--ease), background .2s; }
+    .pin .box.filled { background: var(--glass2); }
+    .pin .box.cur { border-color: var(--a1); box-shadow: 0 0 0 4px rgba(139, 92, 246, .2); }
+    .pin .box.cur::after { content: ""; width: 2px; height: 30px; background: var(--a1); animation: caret 1s steps(1) infinite; }
+    .pin .box.cur.filled::after { display: none; }
+    @keyframes caret { 50% { opacity: 0; } }
+    .pin .sep { display: none; }
+    .pin input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; font-size: 16px; border: 0;
+                 color: transparent; background: transparent; caret-color: transparent; letter-spacing: 40px; }
+    .pin.bad .box { border-color: var(--danger); }
+    .pin.bad { animation: shake .4s; }
+    @keyframes shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
+    .pin.ok .box { border-color: #34d399; background: rgba(52, 211, 153, .14); }
+    .msg { min-height: 22px; font-size: 14.5px; color: var(--muted); margin-bottom: 18px; }
+    .msg.bad { color: var(--danger); }
+    button { width: 100%; height: 58px; border: 0; border-radius: 20px; font: inherit; font-weight: 750; font-size: 17px; color: #fff;
+             background: linear-gradient(135deg, var(--a1), var(--a2)); box-shadow: 0 14px 36px rgba(99, 102, 241, .45);
+             transition: transform .12s var(--ease), opacity .2s; }
+    button:active { transform: scale(.97); }
+    button:disabled { opacity: .45; }
+    .help { margin-top: 26px; padding: 16px 18px; border-radius: 20px; background: var(--glass); border: 1px solid var(--stroke);
+            text-align: left; font-size: 14px; color: var(--muted); display: flex; gap: 14px; align-items: flex-start; }
+    .help b { color: var(--text); }
+    .help .n { flex: none; width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; background: var(--glass2);
+               font-size: 18px; }
+    .tip { margin-top: 12px; font-size: 13px; color: var(--muted); }
+    .tip[hidden] { display: none; }
+  </style>
+</head>
+<body>
+  <div class="aurora"><i></i><i></i><i></i></div>
+  <div class="wrap">
+    <img class="logo" src="/icon.png" alt="">
+    <h1>Mit LakuenCast verbinden</h1>
+    <p class="why">{{REASON}}</p>
+
+    <label class="pin" id="pin">
+      <div class="box"></div><div class="box"></div><div class="box"></div>
+      <div class="box"></div><div class="box"></div><div class="box"></div>
+      <input id="code" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" maxlength="6"
+             aria-label="6-stelliger Code">
+    </label>
+    <div class="msg" id="msg">Code aus dem LakuenCast-Fenster eintippen</div>
+    <button id="go" disabled>Verbinden</button>
+
+    <div class="help">
+      <div class="n">💻</div>
+      <div>Den Code findest du am PC im <b>LakuenCast-Fenster</b> unter <b>„Handy als Fernbedienung“</b>, direkt neben dem QR-Code.
+        Er gilt nur einmal. Danach bleibt dieses Handy <b>5 Stunden</b> verbunden.</div>
+    </div>
+    <div class="tip" id="tip" hidden>Tipp: Teilen → <b>Zum Home-Bildschirm</b>, dann liegt LakuenCast wie eine App auf dem iPhone.</div>
+  </div>
+
+  <script>
+    // Noch gültige Verbindung auf diesem Gerät? Dann direkt zur Fernbedienung.
+    try {
+      const cur = new URLSearchParams(location.search).get("s");
+      const st = JSON.parse(localStorage.getItem("lc-session") || "null");
+      if (st && st.exp * 1000 > Date.now() && st.s !== cur) location.replace("/remote?s=" + encodeURIComponent(st.s));
+      else if (st && st.s === cur) localStorage.removeItem("lc-session");
+    } catch (e) {}
+
+    const $ = (id) => document.getElementById(id);
+    const boxes = document.querySelectorAll(".pin .box");
+    const buzz = (ms) => { try { navigator.vibrate && navigator.vibrate(ms); } catch (_) {} };
+    if (!navigator.standalone && !matchMedia("(display-mode: standalone)").matches) $("tip").hidden = false;
+
+    function draw() {
+      const v = $("code").value.replace(/\D/g, "").slice(0, 6);
+      if ($("code").value !== v) $("code").value = v;
+      boxes.forEach((b, i) => {
+        b.textContent = v[i] || "";
+        b.classList.toggle("filled", !!v[i]);
+        b.classList.toggle("cur", document.activeElement === $("code") && i === Math.min(v.length, 5));
+      });
+      $("go").disabled = v.length !== 6;
+      return v;
+    }
+    $("code").addEventListener("input", () => {
+      $("pin").classList.remove("bad"); $("msg").classList.remove("bad");
+      $("msg").textContent = "Code aus dem LakuenCast-Fenster eintippen";
+      if (draw().length === 6) connect();
+    });
+    $("code").addEventListener("focus", draw);
+    $("code").addEventListener("blur", draw);
+    $("go").onclick = connect;
+    setTimeout(() => $("code").focus(), 300);
+
+    let busy = false;
+    async function connect() {
+      const pin = draw();
+      if (pin.length !== 6 || busy) return;
+      busy = true; $("go").disabled = true; $("msg").textContent = "Verbinde …";
+      try {
+        const r = await fetch("/pair", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin }) });
+        const d = await r.json();
+        if (d.ok) {
+          $("pin").classList.add("ok"); $("msg").textContent = "Verbunden!"; buzz(20);
+          try { localStorage.setItem("lc-session", JSON.stringify({ s: d.s, exp: d.expiresAt })); } catch (_) {}
+          setTimeout(() => location.replace("/remote?s=" + encodeURIComponent(d.s)), 350);
+          return;
+        }
+        $("pin").classList.add("bad"); $("msg").classList.add("bad"); $("msg").textContent = d.error || "Falscher Code"; buzz([30, 40, 30]);
+        setTimeout(() => { $("code").value = ""; draw(); }, 450);
+      } catch (e) {
+        $("msg").classList.add("bad"); $("msg").textContent = "LakuenCast nicht erreichbar. Läuft es am PC? Gleiches WLAN?";
+      } finally {
+        busy = false; draw();
+      }
+    }
+    draw();
+  </script>
+</body>
+</html>

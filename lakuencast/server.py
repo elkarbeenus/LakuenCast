@@ -97,14 +97,15 @@ class Handler(BaseHTTPRequestHandler):
                 # QR-Code gescannt → eigene Verbindung, QR-Code wird ausgetauscht
                 new = self.app.pair(code)
                 if not new:
-                    return self._expired_page("Dieser QR-Code ist schon benutzt oder veraltet.")
+                    return self._expired_page("Dieser QR-Code ist schon benutzt. Tippe den Code vom PC ein.")
                 self.send_response(302)
                 self.send_header("Location", f"/remote?s={new}")
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 return
             if not self._remote_ok(token):
-                return self._expired_page("Die Verbindung ist abgelaufen." if token else "Bitte QR-Code scannen.")
+                return self._expired_page("Die Verbindung ist abgelaufen – einfach neu verbinden." if token
+                                          else "Tippe den 6-stelligen Code vom PC ein.")
             return self._static("remote.html", head)
         if path.startswith("/r/") and path.endswith("/ws"):
             return self._ws_input(path)
@@ -137,6 +138,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path0 = urllib.parse.urlsplit(self.path).path
+        if path0 == "/pair":
+            token, err = self.app.pair_pin(str(self._body().get("pin", "")))
+            if token:
+                return self._json({"ok": True, "s": token, "expiresAt": self.app.session_expires(token)})
+            return self._json({"ok": False, "error": err})
         if path0.startswith("/r/"):
             return self._remote_api(path0, self._body())
         if not self.local:
@@ -205,30 +211,15 @@ class Handler(BaseHTTPRequestHandler):
         return self.app.session_ok(token)
 
     def _expired_page(self, reason: str):
-        html = f"""<!doctype html><html lang="de"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><title>LakuenCast</title>
-<style>body{{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0a12;color:#f4f2ff;
-font:16px -apple-system,system-ui,sans-serif;text-align:center;padding:24px;box-sizing:border-box}}
-.c{{max-width:340px}}.i{{width:76px;height:76px;margin:0 auto 18px;border-radius:24px;display:grid;place-items:center;
-font-size:36px;background:linear-gradient(135deg,#8b5cf6,#6366f1);box-shadow:0 14px 40px rgba(124,92,246,.5)}}
-h1{{font-size:22px;margin:0 0 8px}}p{{color:rgba(244,242,255,.6);margin:0;line-height:1.5}}</style></head>
-<body><div class="c"><div class="i">🔒</div><h1>{reason}</h1>
-<p>Öffne LakuenCast am PC und scanne den aktuellen QR-Code mit der Kamera.</p></div>
-<script>
-// Hat dieses Handy noch eine gültige Verbindung (z. B. nach Neustart), direkt dorthin.
-try {{
-  const cur = new URLSearchParams(location.search).get("s");
-  const st = JSON.parse(localStorage.getItem("lc-session") || "null");
-  if (st && st.exp * 1000 > Date.now() && st.s !== cur) location.replace("/remote?s=" + encodeURIComponent(st.s));
-  else if (st && st.s === cur) localStorage.removeItem("lc-session");
-}} catch (e) {{}}
-</script></body></html>""".encode()
+        """Verbinden-Seite: 6-stelligen Code eintippen (auch in der Home-Bildschirm-App)."""
+        import html as _html
+        page = (WEB / "connect.html").read_text(encoding="utf-8").replace("{{REASON}}", _html.escape(reason)).encode()
         self.send_response(403)
         self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Content-Length", str(len(html)))
+        self.send_header("Content-Length", str(len(page)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
-        self.wfile.write(html)
+        self.wfile.write(page)
 
     def _remote_api(self, path: str, data: dict | None):
         parts = path.split("/")  # ['', 'r', key, cmd]
