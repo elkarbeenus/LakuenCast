@@ -14,7 +14,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QColor, QIcon, QImage, QPixmap
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QLineEdit,
-                               QListWidget, QListWidgetItem, QMenu, QProgressBar, QPushButton, QSizePolicy,
+                               QListWidget, QListWidgetItem, QMenu, QScrollArea, QProgressBar, QPushButton, QSizePolicy,
                                QSlider, QSystemTrayIcon, QVBoxLayout, QWidget)
 
 from . import desktop, qr
@@ -26,6 +26,10 @@ ICON = Path(__file__).parent / "web" / "icon.png"
 STYLE = """
 * { font-size: 13px; color: #f2f0fa; }
 QWidget#root { background: #12111a; }
+QScrollArea { background: #12111a; border: none; }
+QScrollBar:vertical { background: transparent; width: 10px; margin: 2px; }
+QScrollBar::handle:vertical { background: #34304a; border-radius: 4px; min-height: 30px; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 QFrame.card { background: #1c1a27; border: 1px solid #34304a; border-radius: 14px; }
 QFrame#updateBanner { background: #173326; border: 1px solid #30a46c; border-radius: 12px; }
 QFrame#noticeWarn { background: #3a2d12; border: 1px solid #f5a524; border-radius: 12px; }
@@ -101,7 +105,7 @@ class MainWindow(QWidget):
         self.setWindowTitle("LakuenCast")
         self.setWindowIcon(QIcon(str(ICON)))
         self.setStyleSheet(STYLE)
-        self.resize(560, 860)
+        self.resize(580, 940)
         self.setMinimumWidth(460)
         self._build()
 
@@ -120,7 +124,19 @@ class MainWindow(QWidget):
         return f, lay
 
     def _build(self):
-        root = QVBoxLayout(self)
+        # Alles in einen Scrollbereich, damit bei kleinem Fenster nichts abgeschnitten wird
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        content = QWidget()
+        content.setObjectName("root")
+        self.content = content
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
+        root = QVBoxLayout(content)
         root.setContentsMargins(18, 16, 18, 16)
         root.setSpacing(12)
 
@@ -293,19 +309,20 @@ class MainWindow(QWidget):
         card, lay = self._card()
         lay.addWidget(cls(QLabel("📱 Handy als Fernbedienung"), "h2"))
         rr = QHBoxLayout()
+        rr.setAlignment(Qt.AlignTop)
         self.qr_label = QLabel()
         self.qr_label.setObjectName("qr")
         self.qr_label.setFixedSize(132, 132)
         self.qr_label.setAlignment(Qt.AlignCenter)
         rr.addWidget(self.qr_label)
         rtext = QVBoxLayout()
-        rinfo = cls(QLabel("QR-Code mit der iPhone-Kamera scannen oder den Code in der Home-Bildschirm-App eintippen "
-                           "(gleiches WLAN). Beide gelten nur einmal, eine Verbindung hält 5 Stunden."), "small")
+        rinfo = cls(QLabel("QR-Code scannen oder Code in der Handy-App eintippen. Gilt einmal, "
+                           "Verbindung hält 5 Stunden."), "small")
         rinfo.setWordWrap(True)
         rtext.addWidget(rinfo)
         self.pin_label = QLabel()
         self.pin_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.pin_label.setStyleSheet("font-size:24px;font-weight:800;letter-spacing:4px;color:#f2f0fa")
+        self.pin_label.setStyleSheet("font-size:22px;font-weight:800;letter-spacing:3px;color:#f2f0fa;padding:2px 0")
         self.pin_label.setToolTip("Auf dem Handy in der LakuenCast-App eintippen – gilt nur einmal")
         rtext.addWidget(self.pin_label)
         self.remote_url = QLabel()
@@ -313,7 +330,7 @@ class MainWindow(QWidget):
         self.remote_url.setWordWrap(True)
         self.remote_url.setStyleSheet("color:#9b83ff;font-size:12px")
         rtext.addWidget(self.remote_url)
-        self.input_ok = QCheckBox("Maus, Tastatur & Vorschau vom Handy erlauben")
+        self.input_ok = QCheckBox("Maus, Tastatur && Vorschau vom Handy erlauben")
         self.input_ok.setToolTip("Damit lässt sich der PC vom Handy aus komplett bedienen")
         self.input_ok.toggled.connect(lambda on: self.app.set_option(input_enabled=on))
         rtext.addWidget(self.input_ok)
@@ -712,7 +729,7 @@ def run_gui(app: App, start_hidden: bool = False, screenshot: str | None = None)
     if screenshot:
         # Nur für Tests: Fenster rendern, als Bild speichern, beenden
         win.show()
-        QTimer.singleShot(1500, lambda: (win.refresh(), win.grab().save(screenshot), qapp.quit()))
+        QTimer.singleShot(1500, lambda: (win.refresh(), win.content.grab().save(screenshot), qapp.quit()))
         return qapp.exec()
 
     tray = None

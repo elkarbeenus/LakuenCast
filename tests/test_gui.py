@@ -43,7 +43,7 @@ class TestGui(unittest.TestCase):
         self.qapp.processEvents()
         self.win.adjustSize()
         self.qapp.processEvents()
-        self.assertTrue(self.win.grab().save(str(self.out / f"{name}.png")))
+        self.assertTrue(self.win.content.grab().save(str(self.out / f"{name}.png")))
 
     def test_idle(self):
         st = self.app.status()
