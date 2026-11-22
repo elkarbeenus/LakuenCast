@@ -299,8 +299,8 @@ class MainWindow(QWidget):
         self.qr_label.setAlignment(Qt.AlignCenter)
         rr.addWidget(self.qr_label)
         rtext = QVBoxLayout()
-        rinfo = cls(QLabel("Mit der iPhone-Kamera scannen (gleiches WLAN). Dann gehen Pause, Spulen, "
-                           "Lautstärke und „Nächste Folge“ von der Couch. Tipp: „Zum Home-Bildschirm“."), "small")
+        rinfo = cls(QLabel("Mit der iPhone-Kamera scannen (gleiches WLAN). Der QR-Code gilt nur einmal und wird "
+                           "danach sofort ausgetauscht. Eine Verbindung hält 5 Stunden."), "small")
         rinfo.setWordWrap(True)
         rtext.addWidget(rinfo)
         self.remote_url = QLabel()
@@ -312,10 +312,18 @@ class MainWindow(QWidget):
         self.input_ok.setToolTip("Damit lässt sich der PC vom Handy aus komplett bedienen")
         self.input_ok.toggled.connect(lambda on: self.app.set_option(input_enabled=on))
         rtext.addWidget(self.input_ok)
-        newkey = QPushButton("Neuer Schlüssel")
-        newkey.setToolTip("Alte Links/QR-Codes funktionieren danach nicht mehr")
+        self.phones = cls(QLabel(), "small")
+        rtext.addWidget(self.phones)
+        prow = QHBoxLayout()
+        newkey = QPushButton("Neuer QR-Code")
+        newkey.setToolTip("Der angezeigte QR-Code wird ungültig")
         newkey.clicked.connect(self.on_newkey)
-        rtext.addWidget(newkey, 0, Qt.AlignLeft)
+        prow.addWidget(newkey)
+        self.kick = QPushButton("Alle Handys trennen")
+        self.kick.clicked.connect(self.on_kick)
+        prow.addWidget(self.kick)
+        prow.addStretch(1)
+        rtext.addLayout(prow)
         rtext.addStretch(1)
         rr.addLayout(rtext, 1)
         lay.addLayout(rr)
@@ -420,6 +428,11 @@ class MainWindow(QWidget):
 
     def on_newkey(self):
         self.app.config.new_remote_key()
+        self._qr_for = None
+        self.refresh()
+
+    def on_kick(self):
+        self.app.disconnect_phones()
         self._qr_for = None
         self.refresh()
 
@@ -580,12 +593,18 @@ class MainWindow(QWidget):
             box.blockSignals(False)
         self.file_btn.setEnabled("file" not in self.busy and mode != "starting")
         self.file_btn.setText("Bereite Datei vor …" if "file" in self.busy else "🎬  Videodatei senden …   (oder hierher ziehen)")
-        self._qr_tick = getattr(self, "_qr_tick", 0) + 1
-        if self._qr_for is None or self._qr_tick % 15 == 0:  # IP selten neu ermitteln
-            try:
-                self._render_qr(self.app.remote_url())
-            except Exception:  # noqa: BLE001
-                pass
+        try:
+            self._render_qr(self.app.remote_url())  # QR-Code wechselt nach jedem Scan
+        except Exception:  # noqa: BLE001
+            pass
+        ph = st.get("phones") or {}
+        if ph.get("count"):
+            import time as _t
+            until = _t.strftime("%H:%M", _t.localtime(ph["until"]))
+            self.phones.setText(f"📱 {ph['count']} Handy{'s' if ph['count'] > 1 else ''} verbunden – bis {until}")
+        else:
+            self.phones.setText("Kein Handy verbunden")
+        self.kick.setEnabled(bool(ph.get("count")))
 
         # Hinweise
         if st.get("error"):

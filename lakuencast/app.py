@@ -50,6 +50,8 @@ class App:
         self.power_requested: str | None = None
         self._xinput = None
         self.preview_proc = None
+        self.sessions: dict[str, float] = {}   # Handy-Verbindungen: Token → läuft ab um
+        self._lan_ip, self._lan_ip_at = "", 0.0
         self.proxy = proxymod.Proxy()
         self.finished_seq = 0         # zählt hoch, wenn eine gecastete Folge zu Ende ist
         self._finished_msid = None
@@ -235,7 +237,48 @@ class App:
         return ips[0] if ips else "127.0.0.1"
 
     def remote_url(self) -> str:
-        return f"http://{self.lan_ip()}:{self.port}/remote?k={self.config['remote_key']}"
+        if not self._lan_ip or time.time() - self._lan_ip_at > 30:
+            self._lan_ip, self._lan_ip_at = self.lan_ip(), time.time()
+        return f"http://{self._lan_ip}:{self.port}/remote?k={self.config['remote_key']}"
+
+    # ---------------------------------------------------------------- Handy-Verbindungen
+    # Der QR-Code ist ein Einmal-Code: Beim Scannen bekommt das Handy eine eigene
+    # Verbindung (5 Stunden gültig) und der QR-Code wird sofort ausgetauscht.
+
+    SESSION_TTL = 5 * 3600
+
+    def pair(self, code: str) -> str | None:
+        import hmac
+        import secrets
+        with self.lock:
+            if not code or not hmac.compare_digest(code, str(self.config["remote_key"])):
+                return None
+            self.config.new_remote_key()          # alter QR-Code ist ab jetzt wertlos
+            token = secrets.token_urlsafe(18)
+            self.sessions[token] = time.time() + self.SESSION_TTL
+            return token
+
+    def session_ok(self, token: str) -> bool:
+        if not token:
+            return False
+        now = time.time()
+        with self.lock:
+            for t in [t for t, exp in self.sessions.items() if exp <= now]:
+                del self.sessions[t]
+            return token in self.sessions
+
+    def session_expires(self, token: str) -> float:
+        return self.sessions.get(token, 0)
+
+    def disconnect_phones(self) -> None:
+        with self.lock:
+            self.sessions.clear()
+            self.config.new_remote_key()
+
+    def phone_info(self) -> dict:
+        now = time.time()
+        live = [exp for exp in self.sessions.values() if exp > now]
+        return {"count": len(live), "until": max(live) if live else 0}
 
     def power(self, action: str) -> None:
         """PC in den Energiesparmodus schicken oder herunterfahren (vom Handy aus)."""
@@ -420,6 +463,7 @@ class App:
                 "quality": self.quality,
                 "finishedSeq": self.finished_seq,
                 "nextSeq": self.next_seq,
+                "phones": self.phone_info(),
                 "options": {"mute_pc": bool(self.config["mute_pc"]), "low_latency": bool(self.config["low_latency"]),
                             "input_enabled": bool(self.config["input_enabled"])},
                 "pcMuted": bool(self.mirror and self.mirror.pc_muted),

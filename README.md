@@ -36,7 +36,7 @@ LakuenCast nutzt Port **47800**. Steuern lässt es sich nur vom eigenen PC aus. 
 
 LakuenCast zeigt einen QR-Code und eine Adresse wie `http://192.168.178.20:47800/remote?k=…`. Scanne ihn mit der iPhone-Kamera, das Handy muss im selben WLAN sein. Im Browser gehst du dann auf Teilen → **Zum Home-Bildschirm**, so liegt die Fernbedienung wie eine App auf dem Handy.
 
-Der Schlüssel in der Adresse schützt die Fernbedienung, damit niemand sonst im WLAN steuern kann. „Neuer Schlüssel“ macht alte Links ungültig.
+**Sicherheit:** Der QR-Code gilt nur einmal. Beim Scannen bekommt das Handy eine eigene Verbindung, und LakuenCast zeigt sofort einen neuen Code. Jede Verbindung gilt **5 Stunden** und wird danach automatisch getrennt. Mit „Alle Handys trennen“ geht das sofort. Ein Lesezeichen auf dem Home-Bildschirm hält deshalb auch nur 5 Stunden, danach scannst du einfach neu.
 
 „Nächste Folge“ funktioniert, wenn das Video mit LakuenWatcher an den Fernseher gesendet wurde.
 
@@ -51,9 +51,8 @@ Den zweiten Reiter „Maus & Tastatur“ schaltest du in LakuenCast mit **„Mau
 | 2 Finger tippen | Rechtsklick |
 | 2 Finger wischen | Scrollen |
 | 2× tippen und halten | Ziehen (z. B. Fenster verschieben) |
-| „Aufs Bild tippen“ | in der Live-Vorschau genau dort klicken, lange drücken = Rechtsklick |
 
-Die Vorschau kommt mit etwa 0,2 s Verzögerung, also viel schneller als das Bild am Fernseher. Die Steuerung läuft über eine WebSocket-Verbindung. Die Eingaben macht LakuenCast über X11/XTest, das ist im SteamOS-Desktop-Modus schon dabei.
+Die Live-Vorschau am Handy lässt sich zuschalten. Sie kommt mit etwa 0,2 s Verzögerung, also viel schneller als das Bild am Fernseher. Die Steuerung läuft über eine WebSocket-Verbindung. Die Eingaben macht LakuenCast über X11/XTest, das ist im SteamOS-Desktop-Modus schon dabei.
 
 ## Bekannte Grenzen
 

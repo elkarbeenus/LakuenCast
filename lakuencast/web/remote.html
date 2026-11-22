@@ -219,13 +219,24 @@
     @keyframes rip { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.4); opacity: 0; } }
     .preview.direct { outline: 2px solid rgba(34, 211, 238, .7); outline-offset: -2px; }
 
+    .pvtoggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 52px; padding: 0 16px;
+                margin-bottom: 12px; border-radius: 18px; background: var(--glass); border: 1px solid var(--stroke);
+                font-size: 14.5px; font-weight: 650; color: var(--muted); cursor: pointer; }
+    .pvtoggle > span:first-child { display: flex; align-items: center; gap: 10px; }
+    .pvtoggle svg { font-size: 19px; color: var(--a3); }
+    .sw { width: 46px; height: 28px; border-radius: 99px; background: rgba(255,255,255,.16); position: relative; transition: background .2s; flex: none; }
+    .sw i { position: absolute; left: 3px; top: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff;
+            box-shadow: 0 2px 6px rgba(0,0,0,.4); transition: transform .25s var(--ease); }
+    .pvtoggle.on .sw { background: linear-gradient(135deg, var(--a1), var(--a2)); }
+    .pvtoggle.on .sw i { transform: translateX(18px); }
+    .pvtoggle.on { color: var(--text); }
     .seg { display: flex; padding: 4px; border-radius: 16px; background: var(--glass); border: 1px solid var(--stroke); margin-bottom: 12px; }
     .seg button { flex: 1; height: 40px; border-radius: 12px; font-size: 14px; font-weight: 650; color: var(--muted);
                   display: flex; align-items: center; justify-content: center; gap: 7px; }
     .seg button svg { font-size: 17px; }
     .seg button.on { background: var(--glass2); color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,.08); }
 
-    .pad { position: relative; height: 38vh; min-height: 220px; border-radius: 26px 26px 8px 8px; touch-action: none;
+    .pad { position: relative; height: 46vh; min-height: 260px; border-radius: 26px 26px 8px 8px; touch-action: none;
            background:
              radial-gradient(circle at 50% 40%, rgba(139, 92, 246, .16), transparent 60%),
              radial-gradient(rgba(255,255,255,.07) 1px, transparent 1.5px) 0 0 / 18px 18px,
@@ -303,7 +314,7 @@
   <main id="app">
     <header>
       <img src="/icon.png" alt="">
-      <div class="brand">LakuenCast<small>Fernbedienung</small></div>
+      <div class="brand">LakuenCast<small id="brand-sub">Fernbedienung</small></div>
       <div class="chip" id="chip"><i class="dot"></i><span id="dev">…</span></div>
     </header>
 
@@ -357,15 +368,14 @@
       </section>
 
       <div id="mousebox">
-        <div class="preview" id="preview">
+        <div class="pvtoggle" id="pvtoggle">
+          <span><svg><use href="#i-cast"/></svg>Live-Vorschau am Handy</span>
+          <span class="sw" id="pvsw"><i></i></span>
+        </div>
+        <div class="preview" id="preview" hidden>
           <div class="ph" id="ph">Vorschau lädt …</div>
           <img id="pimg" alt="">
           <div class="live"><i></i>LIVE</div>
-        </div>
-
-        <div class="seg" id="mode">
-          <button class="on" data-mode="pad"><svg><use href="#i-pad"/></svg>Touchpad</button>
-          <button data-mode="direct"><svg><use href="#i-tap"/></svg>Aufs Bild tippen</button>
         </div>
 
         <div id="padbox">
@@ -431,7 +441,20 @@
   <div class="toast" id="toast"></div>
 
   <script>
-    const key = new URLSearchParams(location.search).get("k");
+    // Eigene Verbindung dieses Handys (5 Stunden gültig, kommt vom Scannen des QR-Codes)
+    const key = new URLSearchParams(location.search).get("s");
+    let expired = false;
+    function showExpired() {
+      if (expired) return;
+      expired = true;
+      try { clearInterval(poller); } catch (_) {}
+      try { disconnect(); } catch (_) {}
+      const img = document.getElementById("pimg"); if (img) img.removeAttribute("src");
+      document.querySelector(".tabbar").remove();
+      document.getElementById("app").innerHTML = `<div class="done"><div>
+        <div class="big">🔒</div><div class="t">Verbindung abgelaufen</div>
+        <div class="s">Aus Sicherheitsgründen gilt eine Verbindung 5 Stunden.<br>Scanne den QR-Code in LakuenCast neu.</div></div></div>`;
+    }
     const $ = (id) => document.getElementById(id);
     const buzz = (ms = 8) => { try { navigator.vibrate && navigator.vibrate(ms); } catch (_) {} };
     let st = null, volDrag = false, seeking = false, holdUntil = 0, poller = null, toastTimer = null;
@@ -448,7 +471,7 @@
       try {
         const r = await fetch(`/r/${encodeURIComponent(key)}/${cmd}`, body === undefined ? { cache: "no-store" } :
           { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-        if (r.status === 403) { showErr("Schlüssel ungültig – QR-Code in LakuenCast neu scannen."); return null; }
+        if (r.status === 403) { showExpired(); return null; }
         const data = await r.json();
         render(data);
         return data;
@@ -467,6 +490,11 @@
       st = s;
       showErr(s.error || "");
       $("dev").textContent = s.device || "Kein Fernseher";
+      if (s.expiresAt) {
+        const until = new Date(s.expiresAt * 1000).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+        $("brand-sub").textContent = `Verbunden bis ${until}`;
+        if (s.expiresAt * 1000 < Date.now()) showExpired();
+      }
       $("chip").classList.toggle("on", !!s.connected);
       const m = s.media || {};
       const playing = m.playerState === "PLAYING" || s.mode === "mirroring";
@@ -577,6 +605,7 @@
     // Maus & Tastatur
     // =====================================================================
     let tab = "remote", sock = null, sockOk = false, retry = 0, inputAllowed = false;
+    let previewOn = localStorage.getItem("lc-preview") === "1";
     let speed = +(localStorage.getItem("lc-speed") || 16);
     $("speed").value = speed;
     $("speed").oninput = () => { speed = +$("speed").value; localStorage.setItem("lc-speed", speed); };
@@ -594,18 +623,21 @@
 
     function syncMouse() {
       const active = tab === "mouse" && inputAllowed && !document.hidden;
+      const pvOn = active && previewOn;
+      $("preview").hidden = !previewOn;
+      $("pvtoggle").classList.toggle("on", previewOn);
       $("locked").hidden = inputAllowed;
       $("mousebox").hidden = !inputAllowed;
       // Vorschau nur laden, solange der Reiter offen ist (spart Akku und PC-Leistung)
       const img = $("pimg");
-      if (active && !img.dataset.on) {
+      if (pvOn && !img.dataset.on) {
         img.dataset.on = "1";
         img.src = `/r/${encodeURIComponent(key)}/preview.mjpg?fps=10&w=720&t=${Date.now()}`;
         $("ph").textContent = "Vorschau lädt …";
         // Bei MJPEG meldet nicht jeder Browser "geladen" – Hinweis nach kurzer Zeit ausblenden
         setTimeout(() => { if (img.dataset.on && img.naturalWidth) $("ph").hidden = true; }, 1200);
         setTimeout(() => { if (img.dataset.on && img.naturalWidth) $("ph").hidden = true; }, 3000);
-      } else if (!active && img.dataset.on) {
+      } else if (!pvOn && img.dataset.on) {
         delete img.dataset.on;
         img.removeAttribute("src");
         $("ph").hidden = false;
@@ -623,10 +655,12 @@
       sock.onmessage = (e) => {
         const m = JSON.parse(e.data);
         if (m.ok) { sockOk = true; $("net").classList.add("on"); }
+        if (m.error === "expired") { showExpired(); return; }
         if (m.error) { showErr(m.error); }
       };
       sock.onclose = () => {
         sock = null; sockOk = false; $("net").classList.remove("on");
+        if (expired) return;
         if (tab === "mouse" && inputAllowed && !document.hidden) setTimeout(connect, Math.min(4000, 300 * ++retry));
       };
     }
@@ -733,46 +767,12 @@
       el.addEventListener("pointerup", up); el.addEventListener("pointerleave", up); el.addEventListener("pointercancel", up);
     }
 
-    // ---------- Aufs Bild tippen ----------
-    let mode = "pad";
-    document.querySelectorAll("#mode button").forEach((b) => b.onclick = () => {
-      mode = b.dataset.mode; buzz(6);
-      document.querySelectorAll("#mode button").forEach((x) => x.classList.toggle("on", x === b));
-      $("preview").classList.toggle("direct", mode === "direct");
-      $("padbox").hidden = mode === "direct";
-      toast(mode === "direct" ? "Tippe aufs Bild – dort wird geklickt" : "Touchpad");
-    });
-    function imgPoint(e) {
-      const img = $("pimg"), r = img.getBoundingClientRect();
-      const iw = img.naturalWidth || 16, ih = img.naturalHeight || 9;
-      const scale = Math.min(r.width / iw, r.height / ih);
-      const w = iw * scale, h = ih * scale, ox = (r.width - w) / 2, oy = (r.height - h) / 2;
-      const fx = (e.clientX - r.left - ox) / w, fy = (e.clientY - r.top - oy) / h;
-      return fx >= 0 && fx <= 1 && fy >= 0 && fy <= 1 ? { fx, fy, px: e.clientX - r.left, py: e.clientY - r.top } : null;
-    }
-    function ripple(px, py) {
-      const d = document.createElement("div"); d.className = "ripple"; d.style.left = px + "px"; d.style.top = py + "px";
-      $("preview").appendChild(d); setTimeout(() => d.remove(), 600);
-    }
-    let pv = null, longTimer = 0;
-    $("preview").addEventListener("pointerdown", (e) => {
-      if (mode !== "direct") return;
-      const p = imgPoint(e); if (!p) return;
-      e.preventDefault();
-      pv = { ...p, start: performance.now(), long: false, x0: e.clientX, y0: e.clientY };
-      tx({ t: "a", x: p.fx, y: p.fy });
-      longTimer = setTimeout(() => { if (pv) { pv.long = true; tx({ t: "c", b: "right" }); buzz(20); ripple(p.px, p.py); } }, 550);
-    });
-    $("preview").addEventListener("pointermove", (e) => {
-      if (!pv) return;
-      if (Math.abs(e.clientX - pv.x0) + Math.abs(e.clientY - pv.y0) > 10) clearTimeout(longTimer);
-    });
-    $("preview").addEventListener("pointerup", (e) => {
-      if (!pv) return;
-      clearTimeout(longTimer);
-      if (!pv.long) { const p = imgPoint(e) || pv; tx({ t: "a", x: p.fx, y: p.fy }); tx({ t: "c", b: "left" }); ripple(p.px, p.py); buzz(8); }
-      pv = null;
-    });
+    // ---------- Vorschau ein/aus ----------
+    $("pvtoggle").onclick = () => {
+      previewOn = !previewOn; buzz(6);
+      localStorage.setItem("lc-preview", previewOn ? "1" : "0");
+      syncMouse();
+    };
 
     // ---------- Tastatur ----------
     const kbin = $("kbin");

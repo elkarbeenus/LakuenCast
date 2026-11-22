@@ -13,6 +13,7 @@ import os
 import logging
 import mimetypes
 import threading
+import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -90,9 +91,20 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/p/"):
             return self._proxy(path, head)
         if path == "/remote":
-            key = urllib.parse.parse_qs(parts.query).get("k", [""])[0]
-            if not self._remote_ok(key):
-                return self.send_error(403, "Falscher Schlüssel")
+            q = urllib.parse.parse_qs(parts.query)
+            code, token = q.get("k", [""])[0], q.get("s", [""])[0]
+            if code:
+                # QR-Code gescannt → eigene Verbindung, QR-Code wird ausgetauscht
+                new = self.app.pair(code)
+                if not new:
+                    return self._expired_page("Dieser QR-Code ist schon benutzt oder veraltet.")
+                self.send_response(302)
+                self.send_header("Location", f"/remote?s={new}")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                return
+            if not self._remote_ok(token):
+                return self._expired_page("Die Verbindung ist abgelaufen.")
             return self._static("remote.html", head)
         if path.startswith("/r/") and path.endswith("/ws"):
             return self._ws_input(path)
@@ -173,6 +185,8 @@ class Handler(BaseHTTPRequestHandler):
                 app.set_option(**data)
             elif path == "/api/remote/newkey":
                 app.config.new_remote_key()
+            elif path == "/api/remote/disconnect":
+                app.disconnect_phones()
             elif path == "/api/next":
                 app.request_next()
             elif path == "/api/dismiss":
@@ -186,9 +200,26 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": False, "error": str(e), "status": app.status()}, 200)
 
     # ------------------------------------------------------------ Fernbedienung (Handy)
-    def _remote_ok(self, key: str) -> bool:
-        import hmac
-        return bool(key) and hmac.compare_digest(key, str(self.app.config["remote_key"]))
+    def _remote_ok(self, token: str) -> bool:
+        """Gültige Handy-Verbindung (nicht der QR-Code selbst)."""
+        return self.app.session_ok(token)
+
+    def _expired_page(self, reason: str):
+        html = f"""<!doctype html><html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>LakuenCast</title>
+<style>body{{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0a12;color:#f4f2ff;
+font:16px -apple-system,system-ui,sans-serif;text-align:center;padding:24px;box-sizing:border-box}}
+.c{{max-width:340px}}.i{{width:76px;height:76px;margin:0 auto 18px;border-radius:24px;display:grid;place-items:center;
+font-size:36px;background:linear-gradient(135deg,#8b5cf6,#6366f1);box-shadow:0 14px 40px rgba(124,92,246,.5)}}
+h1{{font-size:22px;margin:0 0 8px}}p{{color:rgba(244,242,255,.6);margin:0;line-height:1.5}}</style></head>
+<body><div class="c"><div class="i">🔒</div><h1>{reason}</h1>
+<p>Öffne LakuenCast am PC und scanne den aktuellen QR-Code mit der Kamera.</p></div></body></html>""".encode()
+        self.send_response(403)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(html)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(html)
 
     def _remote_api(self, path: str, data: dict | None):
         parts = path.split("/")  # ['', 'r', key, cmd]
@@ -226,6 +257,7 @@ class Handler(BaseHTTPRequestHandler):
             vol = st.get("volume") or {}
             return self._json({"ok": True, "mode": st["mode"], "title": st["title"], "media": st["media"],
                                "input": bool(app.config["input_enabled"]),
+                               "expiresAt": app.session_expires(parts[2]),
                                "volume": {"level": vol.get("level"), "muted": vol.get("muted")},
                                "device": (st.get("selected") or {}).get("name"),
                                "connected": st["connected"], "error": st["error"]})
@@ -278,6 +310,9 @@ class Handler(BaseHTTPRequestHandler):
                     continue
                 if not self.app.config["input_enabled"]:
                     send({"error": "Maus & Tastatur wurden in LakuenCast ausgeschaltet."})
+                    break
+                if not self.app.session_ok(path.split("/")[2]):
+                    send({"error": "expired"})
                     break
                 try:
                     self._handle_input(xi, json.loads(data))
@@ -340,11 +375,17 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Connection", "close")
         self.end_headers()
         try:
+            token = parts[2]
+            last_check = time.time()
             while True:
                 chunk = proc.stdout.read1(1 << 16)
                 if not chunk:
                     break
                 self.wfile.write(chunk)
+                if time.time() - last_check > 5:
+                    last_check = time.time()
+                    if not self.app.session_ok(token) or not self.app.config["input_enabled"]:
+                        break
         except (BrokenPipeError, ConnectionResetError, OSError):
             pass
         finally:

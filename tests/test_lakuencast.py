@@ -107,6 +107,20 @@ class TestQr(unittest.TestCase):
             self.assertEqual(cv2.QRCodeDetector().detectAndDecode(img)[0], text)
 
 
+def pair(port: int, app) -> str:
+    """QR-Code 'scannen': liefert das Verbindungs-Token aus der Weiterleitung."""
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *a, **k):
+            return None
+    opener = urllib.request.build_opener(NoRedirect)
+    try:
+        opener.open(f"http://127.0.0.1:{port}/remote?k={app.config['remote_key']}", timeout=5)
+    except urllib.error.HTTPError as e:
+        assert e.code == 302, e.code
+        return e.headers["Location"].split("s=")[1]
+    raise AssertionError("keine Weiterleitung")
+
+
 class TestRestartAfterUpdate(unittest.TestCase):
     def test_new_version_takes_over(self):
         """Neue Version startet, während die alte noch kurz läuft → sie muss übernehmen."""
@@ -324,12 +338,23 @@ class TestIntegration(unittest.TestCase):
         self.assertFalse(self.cc.app_running)
 
     def test_5_remote(self):
-        key = self.app.config["remote_key"]
         with self.assertRaises(urllib.error.HTTPError) as e:
             urllib.request.urlopen(f"http://127.0.0.1:{self.port}/remote?k=falsch", timeout=5)
         self.assertEqual(e.exception.code, 403)
-        html = urllib.request.urlopen(f"http://127.0.0.1:{self.port}/remote?k={key}", timeout=5).read().decode()
+        qr_before = self.app.config["remote_key"]
+        key = pair(self.port, self.app)
+        # QR-Code wurde sofort ausgetauscht, der alte gilt nicht mehr
+        self.assertNotEqual(self.app.config["remote_key"], qr_before)
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(f"http://127.0.0.1:{self.port}/remote?k={qr_before}", timeout=5)
+        self.assertEqual(e.exception.code, 403)
+        # Der QR-Code selbst taugt nicht für die Steuerung
+        with self.assertRaises(urllib.error.HTTPError):
+            urllib.request.urlopen(f"http://127.0.0.1:{self.port}/r/{self.app.config['remote_key']}/status", timeout=5)
+        html = urllib.request.urlopen(f"http://127.0.0.1:{self.port}/remote?s={key}", timeout=5).read().decode()
         self.assertIn("Fernbedienung", html)
+        st = json.load(urllib.request.urlopen(f"http://127.0.0.1:{self.port}/r/{key}/status", timeout=5))
+        self.assertAlmostEqual(st["expiresAt"], time.time() + 5 * 3600, delta=60)
         before = self.app.next_seq
         req = urllib.request.Request(f"http://127.0.0.1:{self.port}/r/{key}/next", data=b"{}",
                                      headers={"Content-Type": "application/json"})
@@ -340,7 +365,7 @@ class TestIntegration(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError):
             urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{self.port}/r/falsch/next", data=b"{}"),
                                    timeout=5)
-        self.assertIn(f"/remote?k={key}", self.app.remote_url())
+        self.assertIn(f"/remote?k={self.app.config['remote_key']}", self.app.remote_url())
 
         # Zeitleiste ziehen → absoluter Sprung
         self.post("/api/add", {"host": f"127.0.0.1:{self.cc.port}"})
@@ -369,6 +394,19 @@ class TestIntegration(unittest.TestCase):
         req = urllib.request.Request(f"http://127.0.0.1:{self.port}/r/{key}/power", data=b'{"action": "rm -rf"}',
                                      headers={"Content-Type": "application/json"})
         self.assertFalse(json.load(urllib.request.urlopen(req, timeout=5))["ok"])
+
+        # Nach Ablauf (hier: sofort) ist Schluss
+        self.app.sessions[key] = time.time() - 1
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(f"http://127.0.0.1:{self.port}/r/{key}/status", timeout=5)
+        self.assertEqual(e.exception.code, 403)
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(f"http://127.0.0.1:{self.port}/remote?s={key}", timeout=5)
+        self.assertEqual(e.exception.code, 403)
+        # "Alle Handys trennen"
+        k2 = pair(self.port, self.app)
+        self.app.disconnect_phones()
+        self.assertFalse(self.app.session_ok(k2))
 
     @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "ffmpeg fehlt")
     def test_6_cast_files(self):
@@ -444,7 +482,7 @@ class TestIntegration(unittest.TestCase):
                                 stderr=subprocess.DEVNULL)
         old = os.environ.get("DISPLAY")
         os.environ["DISPLAY"] = disp
-        key = self.app.config["remote_key"]
+        key = pair(self.port, self.app)
         try:
             time.sleep(1)
             self.app._xinput = None
@@ -490,6 +528,20 @@ class TestIntegration(unittest.TestCase):
             self.assertIn(b"\xff\xd8", data)
             st = json.load(urllib.request.urlopen(f"http://127.0.0.1:{self.port}/r/{key}/status", timeout=5))
             self.assertTrue(st["input"])
+
+            # Verbindung läuft ab → WebSocket wird getrennt
+            s = socket.create_connection(("127.0.0.1", self.port), timeout=5)
+            s.sendall((f"GET /r/{key}/ws HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                       f"Sec-WebSocket-Key: {wkey}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
+            rf = s.makefile("rb")
+            while rf.readline() not in (b"\r\n", b""):
+                pass
+            ws.read_frame(rf)
+            self.app.sessions[key] = time.time() - 1
+            s.sendall(ws.mask_frame(b'{"t":"ping"}'))
+            op, msg = ws.read_frame(rf)
+            self.assertEqual(json.loads(msg)["error"], "expired")
+            s.close()
         finally:
             self.app.set_option(input_enabled=False)
             self.app._xinput = None
